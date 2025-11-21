@@ -20,7 +20,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Override MergeContentService to add custom merge tags (subscriber_hash, message_hash)
+        $this->app->bind(
+            \Sendportal\Base\Services\Content\MergeContentService::class,
+            \App\Services\Content\ExtendedMergeContentService::class
+        );
+        
+        // Override MergeSubjectService to add custom merge tags in email subjects
+        $this->app->bind(
+            \Sendportal\Base\Services\Content\MergeSubjectService::class,
+            \App\Services\Content\ExtendedMergeSubjectService::class
+        );
+        
+        // Override MarkAsSent to automatically track email_sent events
+        $this->app->bind(
+            \Sendportal\Base\Services\Messages\MarkAsSent::class,
+            \App\Services\Messages\ExtendedMarkAsSent::class
+        );
     }
 
     public function boot(): void

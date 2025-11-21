@@ -108,6 +108,10 @@ Route::namespace('Workspaces')->middleware(
 Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
     static function () {
         Sendportal::webRoutes();
+        
+        // Campaign tracking route
+        Route::get('campaigns/{id}/report/tracking', [App\Http\Controllers\Campaigns\CampaignTrackingController::class, 'index'])
+            ->name('sendportal.campaigns.reports.tracking');
     }
 );
 
