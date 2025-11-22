@@ -88,8 +88,11 @@ class CampaignTrackingController extends Controller
             $filterTaskType
         );
 
-        // Generate CSV
-        $filename = 'campaign_' . $campaign->id . '_tracking_' . date('Y-m-d_His') . '.csv';
+        // Generate CSV filename with campaign name and timestamp
+        $campaignName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $campaign->name);
+        $campaignName = str_replace(' ', '_', $campaignName);
+        $campaignName = substr($campaignName, 0, 50); // Limit length
+        $filename = $campaignName . '_tracking_' . date('Y-m-d_His') . '.csv';
         
         $headers = [
             'Content-Type' => 'text/csv',
