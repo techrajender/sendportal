@@ -17,7 +17,8 @@ class MessageObserver
 
     /**
      * Handle the Message "creating" event.
-     * Prevent message creation if subscriber should be excluded
+     * This is a backup check - exclusion should be handled in ExtendedCreateMessages pipeline
+     * But we keep this as a safety net
      */
     public function creating(Message $message): void
     {
@@ -42,16 +43,15 @@ class MessageObserver
         $excludedSubscriberIds = $this->exclusionService->getExcludedSubscriberIds($excludedCampaignIds);
 
         if (in_array($message->subscriber_id, $excludedSubscriberIds)) {
-            // Subscriber is excluded, prevent message creation by setting a flag
-            // We'll handle this in the event listener instead
-            \Illuminate\Support\Facades\Log::info('Subscriber should be excluded from campaign', [
+            // Subscriber is excluded - throw exception to prevent creation
+            // This should not happen if ExtendedCreateMessages is working correctly
+            \Illuminate\Support\Facades\Log::warning('MessageObserver: Attempted to create message for excluded subscriber', [
                 'campaign_id' => $campaignId,
                 'subscriber_id' => $message->subscriber_id,
                 'excluded_campaign_ids' => $excludedCampaignIds,
             ]);
             
-            // Store exclusion info in message metadata for the event listener
-            $message->setAttribute('_should_exclude', true);
+            throw new \Exception('Cannot create message for excluded subscriber');
         }
     }
 }

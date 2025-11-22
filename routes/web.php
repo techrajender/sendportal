@@ -126,6 +126,10 @@ Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
         // Campaign status update route
         Route::put('campaigns/{id}/status', [App\Http\Controllers\Campaigns\CampaignStatusController::class, 'update'])
             ->name('sendportal.campaigns.status.update');
+        
+        // Campaign recipients route
+        Route::post('campaigns/{id}/recipients', [App\Http\Controllers\Campaigns\CampaignRecipientsController::class, 'getRecipients'])
+            ->name('sendportal.campaigns.recipients.get');
     }
 );
 

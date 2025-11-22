@@ -21,9 +21,9 @@ class CampaignExclusionService
         }
 
         // Get all subscriber IDs who received emails from the excluded campaigns
+        // Check for email_sent records - if record exists, email was sent
         $excludedSubscriberIds = CampaignSubscriberTracking::whereIn('campaign_id', $excludeCampaignIds)
             ->where('task_type', 'email_sent')
-            ->where('status', 'opened')
             ->distinct()
             ->pluck('subscriber_id')
             ->toArray();

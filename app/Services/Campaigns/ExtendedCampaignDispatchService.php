@@ -4,9 +4,9 @@ namespace App\Services\Campaigns;
 
 use Illuminate\Pipeline\Pipeline;
 use Sendportal\Base\Models\Campaign;
-use Sendportal\Base\Pipelines\Campaigns\CreateMessages;
 use Sendportal\Base\Pipelines\Campaigns\StartCampaign;
 use Sendportal\Base\Services\Campaigns\CampaignDispatchService as BaseCampaignDispatchService;
+use App\Pipelines\Campaigns\ExtendedCreateMessages;
 use App\Pipelines\Campaigns\ExtendedCompleteCampaign;
 
 class ExtendedCampaignDispatchService extends BaseCampaignDispatchService
@@ -33,7 +33,7 @@ class ExtendedCampaignDispatchService extends BaseCampaignDispatchService
 
         $pipes = [
             StartCampaign::class,
-            CreateMessages::class,
+            ExtendedCreateMessages::class, // Use our extended version that filters excluded subscribers
             ExtendedCompleteCampaign::class, // Use our extended version
         ];
 
