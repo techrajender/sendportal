@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\CampaignSubscriberTracking;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Sendportal\Base\Models\Campaign;
 use Sendportal\Base\Models\Message;
+use Sendportal\Base\Models\MessageUrl;
 use Sendportal\Base\Models\Subscriber;
 
 class TrackingService
@@ -110,7 +112,12 @@ class TrackingService
         if ($status === 'opened' && in_array($taskType, ['email_opened', 'email_clicked'])) {
             // Always update Message model (even for existing tracking records)
             // This ensures Message.opened_at/clicked_at is set even if tracking was created before this code
-            $this->updateMessageTracking($campaign, $subscriber, $taskType);
+            $message = $this->updateMessageTracking($campaign, $subscriber, $taskType);
+            
+            // For email_clicked events, also update MessageUrl if URL is provided
+            if ($taskType === 'email_clicked' && $message) {
+                $this->updateMessageUrl($message, $metadata);
+            }
             
             // Only update campaign counts for new events (to avoid unnecessary queries)
             if ($isNewEvent) {
@@ -192,7 +199,7 @@ class TrackingService
      * @param string $taskType
      * @return void
      */
-    protected function updateMessageTracking(Campaign $campaign, Subscriber $subscriber, string $taskType): void
+    protected function updateMessageTracking(Campaign $campaign, Subscriber $subscriber, string $taskType): ?Message
     {
         try {
             // Find the message for this campaign and subscriber
@@ -207,7 +214,7 @@ class TrackingService
                     'subscriber_id' => $subscriber->id,
                     'task_type' => $taskType,
                 ]);
-                return;
+                return null;
             }
 
             if ($taskType === 'email_opened') {
@@ -251,11 +258,87 @@ class TrackingService
                     ]);
                 }
             }
+            
+            return $message;
         } catch (\Exception $e) {
             Log::error('Failed to update message tracking', [
                 'campaign_id' => $campaign->id,
                 'subscriber_id' => $subscriber->id,
                 'task_type' => $taskType,
+                'error' => $e->getMessage(),
+            ]);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Update MessageUrl record for clicked links
+     *
+     * @param Message $message
+     * @param array|null $metadata
+     * @return void
+     */
+    protected function updateMessageUrl(Message $message, ?array $metadata): void
+    {
+        try {
+            // Extract URL from metadata or use a default
+            $url = null;
+            
+            if ($metadata && isset($metadata['url'])) {
+                $url = $metadata['url'];
+            } elseif ($metadata && isset($metadata['redirect'])) {
+                $url = $metadata['redirect'];
+            }
+            
+            // If no URL in metadata, we can't track it
+            if (!$url) {
+                Log::debug('No URL provided in metadata for click tracking', [
+                    'message_id' => $message->id,
+                    'metadata' => $metadata,
+                ]);
+                return;
+            }
+            
+            // Don't track unsubscribe clicks
+            if (Str::contains($url, '/subscriptions/unsubscribe')) {
+                return;
+            }
+            
+            // Generate hash same way as EmailWebhookService
+            $messageUrlHash = md5($message->source_type . '_' . $message->source_id . '_' . $url);
+            
+            // Find or create MessageUrl record
+            $messageUrl = MessageUrl::where('hash', $messageUrlHash)->first();
+            
+            if ($messageUrl) {
+                $messageUrl->update([
+                    'click_count' => $messageUrl->click_count + 1,
+                ]);
+                Log::info('Updated MessageUrl click_count', [
+                    'message_url_id' => $messageUrl->id,
+                    'url' => $url,
+                    'click_count' => $messageUrl->click_count,
+                ]);
+            } else {
+                $messageUrl = MessageUrl::create([
+                    'hash' => $messageUrlHash,
+                    'source_type' => $message->source_type,
+                    'source_id' => $message->source_id,
+                    'url' => $url,
+                    'click_count' => 1,
+                ]);
+                Log::info('Created MessageUrl record', [
+                    'message_url_id' => $messageUrl->id,
+                    'url' => $url,
+                    'source_type' => $message->source_type,
+                    'source_id' => $message->source_id,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to update MessageUrl', [
+                'message_id' => $message->id,
+                'metadata' => $metadata,
                 'error' => $e->getMessage(),
             ]);
         }

@@ -80,6 +80,17 @@ class TrackingController extends Controller
         if (is_string($metadata)) {
             $metadata = json_decode($metadata, true);
         }
+        
+        // For email_clicked events, extract redirect URL and add to metadata
+        if ($taskType === 'email_clicked' && $request->has('redirect')) {
+            if (!is_array($metadata)) {
+                $metadata = [];
+            }
+            // Use redirect as the URL if not already in metadata
+            if (!isset($metadata['url']) && !isset($metadata['redirect'])) {
+                $metadata['url'] = $request->get('redirect');
+            }
+        }
 
         // Convert campaign hash (which is actually campaign ID) to integer
         $campaignId = is_numeric($campaignHash) ? (int) $campaignHash : null;
@@ -129,6 +140,14 @@ class TrackingController extends Controller
             'task_type' => $tracking->task_type,
             'campaign_id' => $tracking->campaign_id,
         ]);
+
+        // For click tracking with redirect parameter, redirect to the destination URL
+        if ($taskType === 'email_clicked' && $request->has('redirect')) {
+            $redirectUrl = $request->get('redirect');
+            if ($redirectUrl && filter_var($redirectUrl, FILTER_VALIDATE_URL)) {
+                return redirect($redirectUrl);
+            }
+        }
 
         // Return 1x1 transparent GIF for email tracking pixels
         return $this->returnTrackingPixel();
