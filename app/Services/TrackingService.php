@@ -177,6 +177,57 @@ class TrackingService
     }
 
     /**
+     * Get paginated tracking data for a campaign, grouped by subscriber
+     *
+     * @param int $campaignId
+     * @param int $perPage
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getCampaignTrackingPaginated(int $campaignId, int $perPage = 25)
+    {
+        // Get unique subscriber IDs from tracking data
+        $subscriberIds = CampaignSubscriberTracking::where('campaign_id', $campaignId)
+            ->distinct()
+            ->pluck('subscriber_id')
+            ->toArray();
+
+        if (empty($subscriberIds)) {
+            // Return empty paginator if no tracking data
+            return \Sendportal\Base\Models\Subscriber::whereRaw('1 = 0')->paginate($perPage);
+        }
+
+        // Get subscribers with pagination
+        $subscribers = \Sendportal\Base\Models\Subscriber::whereIn('id', $subscriberIds)
+            ->orderBy('email')
+            ->paginate($perPage);
+
+        // Get all tracking events for the current page subscribers in one query
+        $currentPageSubscriberIds = $subscribers->pluck('id')->toArray();
+        $allTrackingEvents = CampaignSubscriberTracking::where('campaign_id', $campaignId)
+            ->whereIn('subscriber_id', $currentPageSubscriberIds)
+            ->with(['subscriber'])
+            ->orderBy('tracked_at', 'desc')
+            ->get()
+            ->groupBy('subscriber_id');
+
+        // For each subscriber, get their tracking events
+        foreach ($subscribers as $subscriber) {
+            $subscriberEvents = $allTrackingEvents->get($subscriber->id, collect());
+
+            // Group events by task_type
+            $events = [];
+            foreach ($subscriberEvents as $event) {
+                $events[$event->task_type] = $event;
+            }
+
+            // Add events to subscriber object
+            $subscriber->tracking_events = $events;
+        }
+
+        return $subscribers;
+    }
+
+    /**
      * Get tracking data for a specific subscriber in a campaign
      *
      * @param int $campaignId

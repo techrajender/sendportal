@@ -131,8 +131,8 @@ class TrackingController extends Controller
                 'subscriber_hash' => $subscriberHash,
                 'task_type' => $taskType,
             ]);
-            // Still return image even if tracking fails (to avoid broken images)
-            return $this->returnTrackingPixel();
+            // Return JSON response even if tracking fails
+            return $this->returnJsonResponse(false, 'Tracking failed');
         }
 
         \Illuminate\Support\Facades\Log::info('Tracking successful', [
@@ -149,8 +149,8 @@ class TrackingController extends Controller
             }
         }
 
-        // Return 1x1 transparent GIF for email tracking pixels
-        return $this->returnTrackingPixel();
+        // Return JSON response (works better with CORS and ORB)
+        return $this->returnJsonResponse(true, 'tracked');
     }
 
     /**
@@ -187,12 +187,12 @@ class TrackingController extends Controller
         );
 
         if (!$tracking) {
-            // Still return image even if tracking fails (to avoid broken images)
-            return $this->returnTrackingPixel();
+            // Return JSON response even if tracking fails
+            return $this->returnJsonResponse(false, 'Tracking failed');
         }
 
-        // Return 1x1 transparent GIF for email tracking pixels
-        return $this->returnTrackingPixel();
+        // Return JSON response (works better with CORS and ORB)
+        return $this->returnJsonResponse(true, 'tracked');
     }
 
     /**
@@ -211,27 +211,26 @@ class TrackingController extends Controller
     }
 
     /**
-     * Return a 1x1 transparent GIF image for tracking pixels
+     * Return JSON response for tracking
      * 
-     * @return \Illuminate\Http\Response
+     * This approach works better with CORS and ORB (Opaque Response Blocking)
+     * Works in ngrok, Cloudflare, and with any JS fetch / image / pixel call
+     * 
+     * @param bool $success
+     * @param string $message
+     * @return JsonResponse
      */
-    protected function returnTrackingPixel(): \Illuminate\Http\Response
+    protected function returnJsonResponse(bool $success, string $message = 'tracked'): JsonResponse
     {
-        // 1x1 transparent GIF (43 bytes)
-        // This is the smallest possible GIF: 1x1 transparent pixel
-        $pixel = "\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x21\xF9\x04\x01\x00\x00\x00\x00\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x04\x01\x00\x3B";
-        
-        return response($pixel, 200)
-            ->header('Content-Type', 'image/gif')
-            ->header('Content-Length', (string) strlen($pixel))
+        return response()->json([
+            'success' => $success,
+            'msg' => $message
+        ], 200)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Cross-Origin-Resource-Policy', 'cross-origin')
+            ->header('Content-Type', 'application/json')
             ->header('Cache-Control', 'no-cache, no-store, must-revalidate, private')
             ->header('Pragma', 'no-cache')
-            ->header('Expires', '0')
-            ->header('X-Content-Type-Options', 'nosniff')
-            ->header('Access-Control-Allow-Origin', '*')
-            ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-            ->header('Access-Control-Allow-Headers', 'Content-Type, Accept')
-            ->header('Cross-Origin-Resource-Policy', 'cross-origin')
-            ->header('Cross-Origin-Embedder-Policy', 'unsafe-none');
+            ->header('Expires', '0');
     }
 }

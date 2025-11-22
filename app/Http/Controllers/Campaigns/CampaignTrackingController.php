@@ -41,21 +41,8 @@ class CampaignTrackingController extends Controller
             return redirect()->route('sendportal.campaigns.status', $id);
         }
 
-        // Get all tracking data for this campaign
-        $trackingData = $this->trackingService->getCampaignTracking($campaign->id);
-
-        // Group by subscriber and get all their events
-        $subscribers = [];
-        foreach ($trackingData as $track) {
-            $subscriberId = $track->subscriber_id;
-            if (!isset($subscribers[$subscriberId])) {
-                $subscribers[$subscriberId] = [
-                    'subscriber' => $track->subscriber,
-                    'events' => [],
-                ];
-            }
-            $subscribers[$subscriberId]['events'][$track->task_type] = $track;
-        }
+        // Get paginated tracking data grouped by subscriber
+        $subscribers = $this->trackingService->getCampaignTrackingPaginated($campaign->id, 25);
 
         return view('sendportal::campaigns.reports.tracking', compact('campaign', 'subscribers'));
     }
