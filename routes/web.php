@@ -116,6 +116,16 @@ Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
         // Campaign tracking export route
         Route::get('campaigns/{id}/report/tracking/export', [App\Http\Controllers\Campaigns\CampaignTrackingController::class, 'export'])
             ->name('sendportal.campaigns.reports.tracking.export');
+        
+        // Campaign exclusions routes
+        Route::post('campaigns/{id}/exclusions', [App\Http\Controllers\Campaigns\CampaignExclusionController::class, 'store'])
+            ->name('sendportal.campaigns.exclusions.store');
+        Route::delete('campaigns/{id}/exclusions', [App\Http\Controllers\Campaigns\CampaignExclusionController::class, 'destroy'])
+            ->name('sendportal.campaigns.exclusions.destroy');
+        
+        // Campaign status update route
+        Route::put('campaigns/{id}/status', [App\Http\Controllers\Campaigns\CampaignStatusController::class, 'update'])
+            ->name('sendportal.campaigns.status.update');
     }
 );
 

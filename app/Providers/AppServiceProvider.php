@@ -43,11 +43,26 @@ class AppServiceProvider extends ServiceProvider
             \Sendportal\Base\Repositories\Campaigns\CampaignTenantRepositoryInterface::class,
             \App\Repositories\Campaigns\ExtendedCampaignTenantRepository::class
         );
+        
+        // Override CampaignDispatchService to handle campaigns with 0 messages
+        $this->app->bind(
+            \Sendportal\Base\Services\Campaigns\CampaignDispatchService::class,
+            \App\Services\Campaigns\ExtendedCampaignDispatchService::class
+        );
+        
+        // Override CampaignsController to use pagination of 10
+        $this->app->bind(
+            \Sendportal\Base\Http\Controllers\Campaigns\CampaignsController::class,
+            \App\Http\Controllers\Campaigns\ExtendedCampaignsController::class
+        );
     }
 
     public function boot(): void
     {
         Paginator::useBootstrap();
+
+        // Register Message observer to filter excluded subscribers
+        \Sendportal\Base\Models\Message::observe(\App\Observers\MessageObserver::class);
 
         Sendportal::setCurrentWorkspaceIdResolver(
             static function () {

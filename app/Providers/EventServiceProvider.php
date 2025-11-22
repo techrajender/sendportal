@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Listeners\FilterExcludedSubscribers;
 use App\Listeners\TrackEmailSent;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
@@ -22,6 +23,7 @@ class EventServiceProvider extends ServiceProvider
             SendEmailVerificationNotification::class,
         ],
         MessageDispatchEvent::class => [
+            FilterExcludedSubscribers::class, // Run first to filter excluded subscribers
             TrackEmailSent::class,
         ],
     ];

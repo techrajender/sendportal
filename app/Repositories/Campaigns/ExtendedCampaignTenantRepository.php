@@ -2,6 +2,8 @@
 
 namespace App\Repositories\Campaigns;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 use Sendportal\Base\Models\Campaign;
 use Sendportal\Base\Repositories\Campaigns\PostgresCampaignTenantRepository;
 
@@ -37,6 +39,33 @@ class ExtendedCampaignTenantRepository extends PostgresCampaignTenantRepository
             ->value('average_time_to_click');
 
         return $average ? $this->secondsToHms($average) : 'N/A';
+    }
+
+    /**
+     * Override applyFilters to add search and status_id filters
+     *
+     * @param Builder $instance
+     * @param array $filters
+     * @return void
+     */
+    protected function applyFilters(Builder $instance, array $filters = []): void
+    {
+        // Call parent to apply draft/sent filters
+        parent::applyFilters($instance, $filters);
+
+        // Apply search filter
+        if (Arr::get($filters, 'search')) {
+            $search = Arr::get($filters, 'search');
+            $instance->where('name', 'like', '%' . $search . '%');
+        }
+
+        // Apply status_id filter (if not already filtered by draft/sent)
+        if (Arr::get($filters, 'status_id') && !Arr::get($filters, 'draft') && !Arr::get($filters, 'sent')) {
+            $instance->where('status_id', Arr::get($filters, 'status_id'));
+        } elseif (Arr::get($filters, 'status_id') && (Arr::get($filters, 'draft') || Arr::get($filters, 'sent'))) {
+            // If draft/sent filter is active, further filter by status_id
+            $instance->where('status_id', Arr::get($filters, 'status_id'));
+        }
     }
 }
 
