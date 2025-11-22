@@ -61,6 +61,12 @@ class AppServiceProvider extends ServiceProvider
             \Sendportal\Base\Http\Controllers\Tags\TagsController::class,
             \App\Http\Controllers\Tags\ExtendedTagsController::class
         );
+        
+        // Override DashboardController to add pagination
+        $this->app->bind(
+            \Sendportal\Base\Http\Controllers\DashboardController::class,
+            \App\Http\Controllers\ExtendedDashboardController::class
+        );
     }
 
     public function boot(): void
