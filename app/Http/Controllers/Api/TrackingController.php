@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\DeviceHelper;
 use App\Services\TrackingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -107,14 +108,35 @@ class TrackingController extends Controller
             ], 400);
         }
 
+        // Capture device information
+        $userAgent = $request->userAgent();
+        $ipAddress = $request->ip();
+        $deviceType = DeviceHelper::detectDeviceType($userAgent);
+        $browser = DeviceHelper::detectBrowser($userAgent);
+        $os = DeviceHelper::detectOS($userAgent);
+
+        // Add device information to metadata
+        if (!is_array($metadata)) {
+            $metadata = [];
+        }
+        $metadata['device_info'] = [
+            'browser' => $browser,
+            'ip_address' => $ipAddress,
+            'device_type' => $deviceType,
+            'os' => $os,
+            'user_agent' => $userAgent,
+        ];
+
         // Log the tracking request
         \Illuminate\Support\Facades\Log::info('Tracking pixel accessed', [
             'campaign_id' => $campaignId,
             'subscriber_hash' => $subscriberHash,
             'task_number' => $taskNumber,
             'task_type' => $taskType,
-            'user_agent' => $request->userAgent(),
-            'ip' => $request->ip(),
+            'user_agent' => $userAgent,
+            'ip' => $ipAddress,
+            'device_type' => $deviceType,
+            'browser' => $browser,
         ]);
 
         $tracking = $this->trackingService->track(
@@ -177,6 +199,25 @@ class TrackingController extends Controller
         if (is_string($metadata)) {
             $metadata = json_decode($metadata, true);
         }
+
+        // Capture device information
+        $userAgent = $request->userAgent();
+        $ipAddress = $request->ip();
+        $deviceType = DeviceHelper::detectDeviceType($userAgent);
+        $browser = DeviceHelper::detectBrowser($userAgent);
+        $os = DeviceHelper::detectOS($userAgent);
+
+        // Add device information to metadata
+        if (!is_array($metadata)) {
+            $metadata = [];
+        }
+        $metadata['device_info'] = [
+            'browser' => $browser,
+            'ip_address' => $ipAddress,
+            'device_type' => $deviceType,
+            'os' => $os,
+            'user_agent' => $userAgent,
+        ];
 
         $tracking = $this->trackingService->track(
             $campaignId,
