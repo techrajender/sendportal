@@ -183,28 +183,100 @@ class TrackingService
      * @param int $perPage
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
-    public function getCampaignTrackingPaginated(int $campaignId, int $perPage = 25)
+    public function getCampaignTrackingPaginated(int $campaignId, int $perPage = 25, ?string $searchEmail = null, ?string $filterTaskType = null)
     {
-        // Get unique subscriber IDs from tracking data
-        $subscriberIds = CampaignSubscriberTracking::where('campaign_id', $campaignId)
-            ->distinct()
-            ->pluck('subscriber_id')
-            ->toArray();
+        // Build query for subscriber IDs from tracking data
+        $trackingQuery = CampaignSubscriberTracking::where('campaign_id', $campaignId);
+        
+        // Filter by task type if provided
+        if ($filterTaskType) {
+            $trackingQuery->where('task_type', $filterTaskType);
+        }
+        
+        // Get unique subscriber IDs
+        $subscriberIds = $trackingQuery->distinct()->pluck('subscriber_id')->toArray();
 
         if (empty($subscriberIds)) {
             // Return empty paginator if no tracking data
             return \Sendportal\Base\Models\Subscriber::whereRaw('1 = 0')->paginate($perPage);
         }
 
+        // Build subscriber query
+        $subscriberQuery = \Sendportal\Base\Models\Subscriber::whereIn('id', $subscriberIds);
+        
+        // Search by email if provided
+        if ($searchEmail) {
+            $subscriberQuery->where('email', 'like', '%' . $searchEmail . '%');
+        }
+        
         // Get subscribers with pagination
-        $subscribers = \Sendportal\Base\Models\Subscriber::whereIn('id', $subscriberIds)
-            ->orderBy('email')
-            ->paginate($perPage);
+        $subscribers = $subscriberQuery->orderBy('email')->paginate($perPage);
 
         // Get all tracking events for the current page subscribers in one query
         $currentPageSubscriberIds = $subscribers->pluck('id')->toArray();
         $allTrackingEvents = CampaignSubscriberTracking::where('campaign_id', $campaignId)
             ->whereIn('subscriber_id', $currentPageSubscriberIds)
+            ->with(['subscriber'])
+            ->orderBy('tracked_at', 'desc')
+            ->get()
+            ->groupBy('subscriber_id');
+
+        // For each subscriber, get their tracking events
+        foreach ($subscribers as $subscriber) {
+            $subscriberEvents = $allTrackingEvents->get($subscriber->id, collect());
+
+            // Group events by task_type
+            $events = [];
+            foreach ($subscriberEvents as $event) {
+                $events[$event->task_type] = $event;
+            }
+
+            // Add events to subscriber object
+            $subscriber->tracking_events = $events;
+        }
+
+        return $subscribers;
+    }
+
+    /**
+     * Get all tracking data for export (no pagination)
+     *
+     * @param int $campaignId
+     * @param string|null $searchEmail
+     * @param string|null $filterTaskType
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getCampaignTrackingForExport(int $campaignId, ?string $searchEmail = null, ?string $filterTaskType = null)
+    {
+        // Build query for subscriber IDs from tracking data
+        $trackingQuery = CampaignSubscriberTracking::where('campaign_id', $campaignId);
+        
+        // Filter by task type if provided
+        if ($filterTaskType) {
+            $trackingQuery->where('task_type', $filterTaskType);
+        }
+        
+        // Get unique subscriber IDs
+        $subscriberIds = $trackingQuery->distinct()->pluck('subscriber_id')->toArray();
+
+        if (empty($subscriberIds)) {
+            return collect();
+        }
+
+        // Build subscriber query
+        $subscriberQuery = \Sendportal\Base\Models\Subscriber::whereIn('id', $subscriberIds);
+        
+        // Search by email if provided
+        if ($searchEmail) {
+            $subscriberQuery->where('email', 'like', '%' . $searchEmail . '%');
+        }
+        
+        // Get all subscribers
+        $subscribers = $subscriberQuery->orderBy('email')->get();
+
+        // Get all tracking events for subscribers in one query
+        $allTrackingEvents = CampaignSubscriberTracking::where('campaign_id', $campaignId)
+            ->whereIn('subscriber_id', $subscribers->pluck('id')->toArray())
             ->with(['subscriber'])
             ->orderBy('tracked_at', 'desc')
             ->get()

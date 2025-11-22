@@ -112,6 +112,10 @@ Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
         // Campaign tracking route
         Route::get('campaigns/{id}/report/tracking', [App\Http\Controllers\Campaigns\CampaignTrackingController::class, 'index'])
             ->name('sendportal.campaigns.reports.tracking');
+        
+        // Campaign tracking export route
+        Route::get('campaigns/{id}/report/tracking/export', [App\Http\Controllers\Campaigns\CampaignTrackingController::class, 'export'])
+            ->name('sendportal.campaigns.reports.tracking.export');
     }
 );
 
