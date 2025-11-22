@@ -55,6 +55,12 @@ class AppServiceProvider extends ServiceProvider
             \Sendportal\Base\Http\Controllers\Campaigns\CampaignsController::class,
             \App\Http\Controllers\Campaigns\ExtendedCampaignsController::class
         );
+        
+        // Override TagsController to add subscriber selection
+        $this->app->bind(
+            \Sendportal\Base\Http\Controllers\Tags\TagsController::class,
+            \App\Http\Controllers\Tags\ExtendedTagsController::class
+        );
     }
 
     public function boot(): void
