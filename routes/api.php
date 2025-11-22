@@ -20,10 +20,10 @@ Sendportal::publicApiRoutes();
 // Simplified tracking endpoint using task numbers (1, 2, 3, etc.)
 // GET /api/track/{campaignHash}/{subscriberHash}/{taskNumber}
 // Task numbers: 1=email_sent, 2=email_opened, 3=email_clicked, 4=newsletter_opened, 5=landing_page_opened, 6=thank_you_received, 7=asset_downloaded
-Route::get('track/{campaignHash}/{subscriberHash}/{taskNumber}', [App\Http\Controllers\Api\TrackingController::class, 'trackSimple'])
+Route::match(['GET', 'OPTIONS'], 'track/{campaignHash}/{subscriberHash}/{taskNumber}', [App\Http\Controllers\Api\TrackingController::class, 'trackSimple'])
     ->where('taskNumber', '[1-7]')
     ->name('api.track.simple');
 
 // Legacy tracking endpoint (kept for backward compatibility)
-Route::get('track/{campaignId}/{subscriberHash}/{taskType}', [App\Http\Controllers\Api\TrackingController::class, 'track'])
+Route::match(['GET', 'OPTIONS'], 'track/{campaignId}/{subscriberHash}/{taskType}', [App\Http\Controllers\Api\TrackingController::class, 'track'])
     ->name('api.track');

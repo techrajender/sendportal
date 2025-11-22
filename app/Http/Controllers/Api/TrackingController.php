@@ -50,6 +50,11 @@ class TrackingController extends Controller
      */
     public function trackSimple(string $campaignHash, string $subscriberHash, int $taskNumber, Request $request)
     {
+        // Handle CORS preflight requests
+        if ($request->isMethod('OPTIONS')) {
+            return $this->options();
+        }
+
         // Map task number to task type
         if (!isset(self::TASK_MAP[$taskNumber])) {
             return response()->json([
@@ -141,6 +146,11 @@ class TrackingController extends Controller
      */
     public function track(int $campaignId, string $subscriberHash, string $taskType, Request $request)
     {
+        // Handle CORS preflight requests
+        if ($request->isMethod('OPTIONS')) {
+            return $this->options();
+        }
+
         $status = $request->get('status', 'opened');
         $metadata = $request->get('metadata');
         
@@ -167,6 +177,21 @@ class TrackingController extends Controller
     }
 
     /**
+     * Handle CORS preflight requests
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function options()
+    {
+        return response('', 200)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            ->header('Access-Control-Allow-Headers', 'Content-Type, Accept')
+            ->header('Access-Control-Max-Age', '86400')
+            ->header('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+
+    /**
      * Return a 1x1 transparent GIF image for tracking pixels
      * 
      * @return \Illuminate\Http\Response
@@ -186,6 +211,8 @@ class TrackingController extends Controller
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('Access-Control-Allow-Origin', '*')
             ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-            ->header('Access-Control-Allow-Headers', 'Content-Type');
+            ->header('Access-Control-Allow-Headers', 'Content-Type, Accept')
+            ->header('Cross-Origin-Resource-Policy', 'cross-origin')
+            ->header('Cross-Origin-Embedder-Policy', 'unsafe-none');
     }
 }

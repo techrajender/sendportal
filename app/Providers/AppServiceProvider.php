@@ -37,6 +37,12 @@ class AppServiceProvider extends ServiceProvider
             \Sendportal\Base\Services\Messages\MarkAsSent::class,
             \App\Services\Messages\ExtendedMarkAsSent::class
         );
+        
+        // Override CampaignTenantRepository to fix average time calculations
+        $this->app->bind(
+            \Sendportal\Base\Repositories\Campaigns\CampaignTenantRepositoryInterface::class,
+            \App\Repositories\Campaigns\ExtendedCampaignTenantRepository::class
+        );
     }
 
     public function boot(): void
