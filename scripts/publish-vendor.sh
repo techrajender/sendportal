@@ -3,6 +3,7 @@
 # SendPortal Publish Vendor Files Script
 # This script publishes SendPortal vendor files
 # Based on: https://sendportal.io/docs/v1/getting-started/configuration-and-setup
+# Supports both local PHP and Docker setups
 
 set -e
 
@@ -15,6 +16,11 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
+
+# Source docker helper functions
+if [ -f "$SCRIPT_DIR/docker-helper.sh" ]; then
+    source "$SCRIPT_DIR/docker-helper.sh"
+fi
 
 # Function to find PHP executable
 find_php() {
@@ -66,21 +72,36 @@ find_php() {
     return 1
 }
 
-# Find PHP executable
-PHP_CMD=$(find_php || true)
-
-if [ -z "$PHP_CMD" ]; then
-    echo "❌ Error: PHP executable not found!"
+# Check if using Docker
+if is_docker_compose; then
+    echo "🐳 Detected Docker Compose setup"
+    echo "Using Docker container..."
     echo ""
-    echo "Please install PHP 8.2 or 8.3, or ensure PHP is in your PATH."
+    PHP_CMD="docker-compose exec -T app php"
+elif is_docker; then
+    echo "🐳 Running inside Docker container"
     echo ""
-    echo "Common solutions:"
-    echo "  1. Install PHP: sudo apt-get install php8.2 (Ubuntu/Debian)"
-    echo "  2. Install PHP: sudo yum install php82 (RHEL/CentOS)"
-    echo "  3. Add PHP to PATH if installed in a custom location"
-    echo "  4. Use a PHP version manager (phpbrew, asdf, etc.)"
-    echo ""
-    exit 1
+    PHP_CMD="php"
+else
+    PHP_CMD=$(get_php_cmd)
+    if [ -z "$PHP_CMD" ]; then
+        PHP_CMD=$(find_php || true)
+    fi
+    
+    if [ -z "$PHP_CMD" ]; then
+        echo "❌ Error: PHP executable not found!"
+        echo ""
+        check_docker_setup
+        echo "Please install PHP 8.2 or 8.3, or ensure PHP is in your PATH."
+        echo ""
+        echo "Common solutions:"
+        echo "  1. Install PHP: sudo apt-get install php8.2 (Ubuntu/Debian)"
+        echo "  2. Install PHP: sudo yum install php82 (RHEL/CentOS)"
+        echo "  3. Use Docker: docker-compose up -d"
+        echo "  4. Add PHP to PATH if installed in a custom location"
+        echo ""
+        exit 1
+    fi
 fi
 
 echo "Publishing SendPortal vendor files..."

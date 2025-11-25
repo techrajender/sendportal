@@ -9,9 +9,18 @@ This directory contains shell scripts to help you set up SendPortal based on the
 1. **`setup.sh`** - Automated setup using the setup command
    - Runs `php artisan sp:install` to guide you through setup
    - Creates `.env` file if it doesn't exist
+   - **Supports Docker**: Automatically detects and uses Docker if available
    - Recommended for first-time setup
 
-2. **`manual-setup.sh`** - Manual configuration steps
+2. **`setup-docker.sh`** - Docker Compose setup (NEW)
+   - Complete Docker setup with all steps
+   - Builds and starts containers
+   - Runs migrations automatically
+   - Publishes vendor files
+   - Optimizes Laravel
+   - Recommended for Docker deployments
+
+3. **`manual-setup.sh`** - Manual configuration steps
    - Creates `.env` file from `.env.example`
    - Generates application key
    - Configures base URL
@@ -86,8 +95,14 @@ This directory contains shell scripts to help you set up SendPortal based on the
 
 ### Quick Start
 
-For a complete automated setup:
+**Option 1: Using Docker (Recommended)**
+```bash
+cd scripts
+chmod +x *.sh
+./setup-docker.sh
+```
 
+**Option 2: Local PHP Setup**
 ```bash
 cd scripts
 chmod +x *.sh
@@ -176,11 +191,17 @@ chmod +x *.sh
 
 ## Prerequisites
 
+### For Local Setup:
 - PHP 8.2 or 8.3
 - Composer
 - Database (MySQL or PostgreSQL)
 - (Optional) Redis for queue processing
 - (Optional) Supervisor for process management
+
+### For Docker Setup:
+- Docker 20.10+
+- Docker Compose 2.0+
+- Existing PostgreSQL and Redis containers (or use the ones in docker-compose.yml)
 
 ## Notes
 

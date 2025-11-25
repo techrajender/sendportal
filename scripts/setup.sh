@@ -3,6 +3,7 @@
 # SendPortal Setup Script
 # This script runs the automated setup command for SendPortal
 # Based on: https://sendportal.io/docs/v1/getting-started/configuration-and-setup
+# Supports both local PHP and Docker setups
 
 set -e
 
@@ -15,6 +16,11 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
+
+# Source docker helper functions
+if [ -f "$SCRIPT_DIR/docker-helper.sh" ]; then
+    source "$SCRIPT_DIR/docker-helper.sh"
+fi
 
 # Function to find PHP executable
 find_php() {
@@ -161,6 +167,23 @@ if [ ! -f .env ]; then
         exit 1
     fi
     echo ""
+fi
+
+# Check if using Docker
+if is_docker_compose; then
+    echo "🐳 Detected Docker Compose setup"
+    echo "Using Docker container for setup..."
+    echo ""
+    PHP_CMD="docker-compose exec -T app php"
+elif is_docker; then
+    echo "🐳 Running inside Docker container"
+    echo ""
+    PHP_CMD="php"
+else
+    PHP_CMD=$(get_php_cmd)
+    if [ -z "$PHP_CMD" ]; then
+        PHP_CMD=$(find_php || true)
+    fi
 fi
 
 # Run the setup command

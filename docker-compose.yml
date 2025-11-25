@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sendportal-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./storage:/var/www/html/storage
+    environment:
+      # Application
+      - APP_NAME=${APP_NAME:-SendPortal}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=${APP_KEY:-}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - APP_URL=${APP_URL:-http://localhost}
+      
+      # Database (using existing postgres container)
+      - DB_CONNECTION=${DB_CONNECTION:-pgsql}
+      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_DATABASE=${DB_DATABASE:-sendportal_dev}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      
+      # Cache & Session
+      - CACHE_DRIVER=${CACHE_DRIVER:-redis}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
+      - SESSION_LIFETIME=${SESSION_LIFETIME:-120}
+      
+      # Queue
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
+      
+      # Redis (using existing redis container)
+      - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      
+      # Mail
+      - MAIL_MAILER=${MAIL_MAILER:-smtp}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-${APP_NAME}}
+      
+      # SendPortal Settings
+      - SENDPORTAL_REGISTER=${SENDPORTAL_REGISTER:-false}
+      - SENDPORTAL_PASSWORD_RESET=${SENDPORTAL_PASSWORD_RESET:-true}
+      
+      # AWS (optional)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-}
+      
+      # Docker specific
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-true}
+      - PUBLISH_VENDOR=${PUBLISH_VENDOR:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - sendportal-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: sendportal-nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:80"
+    volumes:
+      - ./:/var/www/html
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - sendportal-network
+
+  horizon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sendportal-horizon
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan horizon
+    volumes:
+      - ./:/var/www/html
+    environment:
+      - APP_NAME=${APP_NAME:-SendPortal}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=${APP_KEY:-}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - DB_CONNECTION=${DB_CONNECTION:-pgsql}
+      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_DATABASE=${DB_DATABASE:-sendportal_dev}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
+      - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      # Docker specific
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-true}
+      - PUBLISH_VENDOR=${PUBLISH_VENDOR:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - app
+    networks:
+      - sendportal-network
+
+networks:
+  sendportal-network:
+    driver: bridge
+

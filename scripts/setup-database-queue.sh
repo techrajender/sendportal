@@ -16,6 +16,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
+# Source docker helper functions
+if [ -f "$SCRIPT_DIR/docker-helper.sh" ]; then
+    source "$SCRIPT_DIR/docker-helper.sh"
+fi
+
 # Function to find PHP executable
 find_php() {
     # First, try command -v (checks PATH)
@@ -99,6 +104,19 @@ else
 fi
 echo "✓ Queue connection set to 'database'"
 echo ""
+
+# Check if using Docker
+if is_docker_compose; then
+    PHP_CMD="docker-compose exec -T app php"
+    echo "🐳 Using Docker Compose"
+elif is_docker; then
+    PHP_CMD="php"
+else
+    PHP_CMD=$(get_php_cmd)
+    if [ -z "$PHP_CMD" ]; then
+        PHP_CMD=$(find_php || true)
+    fi
+fi
 
 # Create jobs table migration
 echo "Step 2: Creating jobs table migration..."
