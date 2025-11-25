@@ -6,6 +6,7 @@ use App\Models\CampaignExclusion;
 use App\Services\CampaignExclusionService;
 use Sendportal\Base\Pipelines\Campaigns\CreateMessages as BaseCreateMessages;
 use Sendportal\Base\Models\Campaign;
+use Sendportal\Base\Models\Message;
 use Sendportal\Base\Models\Subscriber;
 
 class ExtendedCreateMessages extends BaseCreateMessages
@@ -62,6 +63,41 @@ class ExtendedCreateMessages extends BaseCreateMessages
 
             $this->dispatch($campaign, $subscriber);
         }
+    }
+
+    /**
+     * Override findMessage to allow creating new messages for subscribers
+     * who had unsent messages deleted during reprocessing
+     *
+     * @param Campaign $campaign
+     * @param Subscriber $subscriber
+     * @return Message|null
+     */
+    protected function findMessage(Campaign $campaign, Subscriber $subscriber): ?Message
+    {
+        // Check if this campaign is being reprocessed and this subscriber had unsent messages deleted
+        $cacheKey = "campaign_reprocess_subscribers_{$campaign->id}";
+        $reprocessSubscriberIds = \Illuminate\Support\Facades\Cache::get($cacheKey, []);
+        
+        // If this subscriber had unsent messages deleted during reprocessing,
+        // only check for unsent messages (not sent ones)
+        // This allows creating new messages for reprocessing
+        if (!empty($reprocessSubscriberIds) && in_array($subscriber->id, $reprocessSubscriberIds)) {
+            \Log::info('ExtendedCreateMessages: Checking for unsent messages only (reprocessing)', [
+                'campaign_id' => $campaign->id,
+                'subscriber_id' => $subscriber->id,
+            ]);
+            
+            return Message::where('workspace_id', $campaign->workspace_id)
+                ->where('subscriber_id', $subscriber->id)
+                ->where('source_type', Campaign::class)
+                ->where('source_id', $campaign->id)
+                ->whereNull('sent_at') // Only check unsent messages
+                ->first();
+        }
+
+        // Default behavior: check for any message (sent or unsent)
+        return parent::findMessage($campaign, $subscriber);
     }
 }
 

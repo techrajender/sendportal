@@ -94,6 +94,9 @@ class ExtendedMarkAsSent extends BaseMarkAsSent
     protected function checkAndUpdateCampaignStatus(Campaign $campaign): void
     {
         try {
+            // Refresh campaign to get latest status
+            $campaign->refresh();
+            
             // Only check if campaign is in sending status
             if ($campaign->status_id !== CampaignStatus::STATUS_SENDING) {
                 return;
@@ -115,6 +118,7 @@ class ExtendedMarkAsSent extends BaseMarkAsSent
                 'campaign_name' => $campaign->name,
                 'total_messages' => $totalMessages,
                 'sent_messages' => $sentMessages,
+                'status_id' => $campaign->status_id,
             ]);
 
             // If all messages are sent, mark campaign as sent
@@ -126,8 +130,31 @@ class ExtendedMarkAsSent extends BaseMarkAsSent
                     'sent_messages' => $sentMessages,
                 ]);
 
-                $campaign->status_id = CampaignStatus::STATUS_SENT;
-                $campaign->save();
+                // Use fresh query to avoid stale model issues
+                $updated = Campaign::where('id', $campaign->id)
+                    ->where('status_id', CampaignStatus::STATUS_SENDING) // Only update if still in sending status
+                    ->update(['status_id' => CampaignStatus::STATUS_SENT]);
+                
+                if ($updated > 0) {
+                    \Illuminate\Support\Facades\Log::info('Campaign status updated to sent', [
+                        'campaign_id' => $campaign->id,
+                    ]);
+                } else {
+                    \Illuminate\Support\Facades\Log::warning('Campaign status update failed - may have been updated by another process', [
+                        'campaign_id' => $campaign->id,
+                        'current_status_id' => $campaign->status_id,
+                    ]);
+                }
+            } elseif ($totalMessages > 0 && $sentMessages < $totalMessages) {
+                // Log progress for debugging (only log every 10th message to reduce log noise)
+                if ($sentMessages % 10 === 0 || $sentMessages === 1) {
+                    \Illuminate\Support\Facades\Log::debug('Campaign still sending', [
+                        'campaign_id' => $campaign->id,
+                        'total_messages' => $totalMessages,
+                        'sent_messages' => $sentMessages,
+                        'remaining' => $totalMessages - $sentMessages,
+                    ]);
+                }
             }
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error checking campaign completion status', [

@@ -12,6 +12,7 @@ use Sendportal\Base\Facades\Sendportal;
 use Sendportal\Base\Http\Controllers\Controller;
 use Sendportal\Base\Models\Campaign;
 use Sendportal\Base\Models\CampaignStatus;
+use Sendportal\Base\Models\Message;
 use Sendportal\Base\Repositories\Campaigns\CampaignTenantRepositoryInterface;
 
 class CampaignStatusController extends Controller
@@ -150,6 +151,83 @@ class CampaignStatusController extends Controller
     }
 
     /**
+     * Check and fix stuck campaigns
+     * This can be called to immediately check and fix campaigns stuck in sending status
+     */
+    public function checkStuck(): JsonResponse
+    {
+        try {
+            $stuckCampaigns = Campaign::where('status_id', CampaignStatus::STATUS_SENDING)
+                ->get();
+
+            $fixedCount = 0;
+            $fixedCampaigns = [];
+
+            foreach ($stuckCampaigns as $campaign) {
+                $totalMessages = Message::where('source_id', $campaign->id)
+                    ->where('source_type', Campaign::class)
+                    ->count();
+
+                $sentMessages = Message::where('source_id', $campaign->id)
+                    ->where('source_type', Campaign::class)
+                    ->whereNotNull('sent_at')
+                    ->count();
+
+                // If all messages are sent, mark campaign as sent
+                if ($totalMessages > 0 && $sentMessages >= $totalMessages) {
+                    Campaign::where('id', $campaign->id)
+                        ->update(['status_id' => CampaignStatus::STATUS_SENT]);
+
+                    Log::info('Fixed stuck campaign via checkStuck endpoint', [
+                        'campaign_id' => $campaign->id,
+                        'campaign_name' => $campaign->name,
+                        'total_messages' => $totalMessages,
+                        'sent_messages' => $sentMessages,
+                    ]);
+
+                    $fixedCampaigns[] = [
+                        'id' => $campaign->id,
+                        'name' => $campaign->name,
+                    ];
+                    $fixedCount++;
+                } elseif ($totalMessages === 0) {
+                    // No messages, mark as sent
+                    Campaign::where('id', $campaign->id)
+                        ->update(['status_id' => CampaignStatus::STATUS_SENT]);
+
+                    Log::info('Fixed stuck campaign with 0 messages via checkStuck endpoint', [
+                        'campaign_id' => $campaign->id,
+                        'campaign_name' => $campaign->name,
+                    ]);
+
+                    $fixedCampaigns[] = [
+                        'id' => $campaign->id,
+                        'name' => $campaign->name,
+                    ];
+                    $fixedCount++;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Checked {$stuckCampaigns->count()} campaign(s) in sending status. Fixed {$fixedCount} campaign(s).",
+                'checked_count' => $stuckCampaigns->count(),
+                'fixed_count' => $fixedCount,
+                'fixed_campaigns' => $fixedCampaigns,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error checking stuck campaigns', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to check stuck campaigns: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Reprocess a stuck campaign that is in queued status
      */
     public function reprocess(int $id): JsonResponse
@@ -235,6 +313,7 @@ class CampaignStatusController extends Controller
             ]);
 
             // If campaign is in sending status, delete unsent messages to allow reprocessing
+            $reprocessSubscriberIds = [];
             if ($campaign->sending) {
                 $unsentMessages = \Sendportal\Base\Models\Message::where('source_id', $campaign->id)
                     ->where('source_type', \Sendportal\Base\Models\Campaign::class)
@@ -244,10 +323,15 @@ class CampaignStatusController extends Controller
                 $unsentCount = $unsentMessages->count();
                 
                 if ($unsentCount > 0) {
+                    // Track subscriber IDs who had unsent messages deleted
+                    // This allows ExtendedCreateMessages to create new messages for them
+                    $reprocessSubscriberIds = $unsentMessages->pluck('subscriber_id')->unique()->toArray();
+                    
                     Log::info('Deleting unsent messages before reprocessing', [
                         'campaign_id' => $campaign->id,
                         'unsent_messages_count' => $unsentCount,
                         'message_ids' => $unsentMessages->pluck('id')->toArray(),
+                        'reprocess_subscriber_ids' => $reprocessSubscriberIds,
                     ]);
                     
                     // Delete all unsent messages - this will allow canSendToSubscriber to return true
@@ -259,25 +343,74 @@ class CampaignStatusController extends Controller
                     Log::info('Deleted unsent messages', [
                         'campaign_id' => $campaign->id,
                         'deleted_count' => $unsentCount,
+                        'reprocess_subscriber_ids_count' => count($reprocessSubscriberIds),
                     ]);
                 }
             }
 
             // Reset campaign to queued status before dispatching (for both queued and stuck sending campaigns)
+            // Use withoutEvents() to prevent CampaignObserver from creating a duplicate delayed job
             if ($campaign->status_id !== CampaignStatus::STATUS_QUEUED) {
-                $campaign->status_id = CampaignStatus::STATUS_QUEUED;
-                $campaign->save();
+                $oldStatusId = $campaign->status_id;
                 
-                Log::info('Campaign status reset to queued for reprocessing', [
+                Campaign::withoutEvents(function () use ($campaign) {
+                    $campaign->status_id = CampaignStatus::STATUS_QUEUED;
+                    $campaign->save();
+                });
+                
+                Log::info('Campaign status reset to queued for reprocessing (without events)', [
                     'campaign_id' => $campaign->id,
-                    'old_status_id' => $campaign->getOriginal('status_id'),
+                    'old_status_id' => $oldStatusId,
                     'new_status_id' => CampaignStatus::STATUS_QUEUED,
+                ]);
+            }
+
+            // Refresh campaign and reload relationships to ensure we have the latest data
+            $campaign->refresh();
+            $campaign->load(['tags', 'status']);
+
+            Log::info('About to dispatch campaign for reprocessing', [
+                'campaign_id' => $campaign->id,
+                'status_id' => $campaign->status_id,
+                'is_queued' => $campaign->queued,
+                'recipient_count' => $recipientCount,
+            ]);
+
+            // Store reprocess subscriber IDs in cache so ExtendedCreateMessages can access them
+            // Use a campaign-specific key that expires after 5 minutes
+            if (!empty($reprocessSubscriberIds)) {
+                $cacheKey = "campaign_reprocess_subscribers_{$campaign->id}";
+                \Illuminate\Support\Facades\Cache::put($cacheKey, $reprocessSubscriberIds, 300); // 5 minutes
+                
+                Log::info('Stored reprocess subscriber IDs in cache', [
+                    'campaign_id' => $campaign->id,
+                    'cache_key' => $cacheKey,
+                    'subscriber_ids_count' => count($reprocessSubscriberIds),
                 ]);
             }
 
             // Dispatch the campaign (this will process the campaign and queue message dispatch jobs)
             // We call handle directly to ensure immediate processing for stuck campaigns
-            $this->dispatchService->handle($campaign);
+            try {
+                $this->dispatchService->handle($campaign);
+                
+                Log::info('Campaign dispatch handle completed successfully', [
+                    'campaign_id' => $campaign->id,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Error in dispatch handle during reprocess', [
+                    'campaign_id' => $campaign->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                throw $e;
+            } finally {
+                // Clean up cache after processing
+                if (!empty($reprocessSubscriberIds)) {
+                    $cacheKey = "campaign_reprocess_subscribers_{$campaign->id}";
+                    \Illuminate\Support\Facades\Cache::forget($cacheKey);
+                }
+            }
 
             return response()->json([
                 'success' => true,
