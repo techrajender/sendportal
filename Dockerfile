@@ -49,6 +49,9 @@ RUN chown -R www-data:www-data /var/www/html \
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist || true
 
+# Create health check file
+RUN touch /var/www/html/storage/app/health
+
 # Expose port 9000 for PHP-FPM
 EXPOSE 9000
 

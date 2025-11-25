@@ -22,9 +22,9 @@ if ! command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev
     exit 1
 fi
 
-# Check if docker-compose.yml exists
-if [ ! -f docker-compose.yml ]; then
-    echo "❌ Error: docker-compose.yml not found!"
+# Check if Dockerfile exists
+if [ ! -f Dockerfile ]; then
+    echo "❌ Error: Dockerfile not found!"
     echo "Please ensure you're in the SendPortal project directory."
     exit 1
 fi
@@ -50,51 +50,48 @@ if [ ! -f .env ]; then
     fi
 fi
 
-echo "Step 1: Building Docker images..."
-docker-compose build
+echo "⚠️  Note: This script is for local Docker development."
+echo "For Coolify deployment, use the Coolify dashboard instead."
+echo ""
+echo "Step 1: Building Docker image..."
+docker build -t sendportal:latest .
 
 echo ""
-echo "Step 2: Starting containers..."
-docker-compose up -d
+echo "Step 2: Running container..."
+docker run -d --name sendportal-app \
+    -e RUN_MIGRATIONS=true \
+    -e PUBLISH_VENDOR=true \
+    -p 8000:9000 \
+    sendportal:latest
 
 echo ""
 echo "Step 3: Waiting for services to be ready..."
 sleep 5
 
 echo ""
-echo "Step 4: Running migrations..."
-docker-compose exec -T app php artisan migrate --force
+echo "Step 4: Checking migrations status..."
+docker exec sendportal-app php artisan migrate:status || true
 
 echo ""
-echo "Step 5: Publishing vendor files..."
-docker-compose exec -T app php artisan vendor:publish --provider="Sendportal\\Base\\SendportalBaseServiceProvider" --force
-
-echo ""
-echo "Step 6: Generating application key (if needed)..."
-docker-compose exec -T app php artisan key:generate --force || true
-
-echo ""
-echo "Step 7: Optimizing Laravel..."
-docker-compose exec -T app php artisan config:cache
-docker-compose exec -T app php artisan route:cache
-docker-compose exec -T app php artisan view:cache
+echo "Step 5: Viewing logs..."
+echo "Container is running. Check logs with: docker logs sendportal-app"
 
 echo ""
 echo "=========================================="
 echo "Docker Setup Complete!"
 echo "=========================================="
 echo ""
-echo "Services are running:"
-echo "  - Web: http://localhost:8000"
+echo "Container is running:"
 echo "  - App container: sendportal-app"
-echo "  - Nginx: sendportal-nginx"
-echo "  - Horizon: sendportal-horizon"
+echo "  - Access via reverse proxy on port 8000"
 echo ""
 echo "Useful commands:"
-echo "  - View logs: docker-compose logs -f"
-echo "  - Stop services: docker-compose down"
-echo "  - Restart services: docker-compose restart"
-echo "  - Run artisan: docker-compose exec app php artisan <command>"
+echo "  - View logs: docker logs -f sendportal-app"
+echo "  - Stop container: docker stop sendportal-app"
+echo "  - Remove container: docker rm sendportal-app"
+echo "  - Run artisan: docker exec sendportal-app php artisan <command>"
+echo ""
+echo "For production deployment, use Coolify (see COOLIFY.md)"
 echo ""
 echo "Next steps:"
 echo "1. Access the web interface and complete the setup wizard"

@@ -37,7 +37,11 @@ fi
 # Run migrations
 if [ "$RUN_MIGRATIONS" = "true" ] || [ -z "$RUN_MIGRATIONS" ]; then
     echo "Running database migrations..."
-    php artisan migrate --force || true
+    php artisan migrate --force || {
+        echo "⚠️  Migration failed, but continuing..."
+        # Don't exit, allow container to start even if migrations fail
+        # This is useful for debugging
+    }
     echo "✓ Migrations completed"
 fi
 

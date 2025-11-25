@@ -11,11 +11,10 @@ is_docker() {
 # Check if docker-compose is available and project is running
 is_docker_compose() {
     if command -v docker-compose >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
-        # Check if docker-compose.yml exists
-        if [ -f docker-compose.yml ]; then
+        # Check if coolify.yml exists (for Coolify) or containers are running
+        if [ -f coolify.yml ] || docker ps --format "{{.Names}}" 2>/dev/null | grep -q "sendportal"; then
             # Check if containers are running
-            if docker-compose ps 2>/dev/null | grep -q "sendportal-app" || \
-               docker ps --format "{{.Names}}" 2>/dev/null | grep -q "sendportal-app"; then
+            if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "sendportal"; then
                 return 0
             fi
         fi

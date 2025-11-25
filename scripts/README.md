@@ -201,7 +201,7 @@ chmod +x *.sh
 ### For Docker Setup:
 - Docker 20.10+
 - Docker Compose 2.0+
-- Existing PostgreSQL and Redis containers (or use the ones in docker-compose.yml)
+- Existing PostgreSQL and Redis containers (configured via environment variables)
 
 ## Notes
 
