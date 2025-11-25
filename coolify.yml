@@ -1,0 +1,65 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${PROJECT_UUID}
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./storage:/var/www/html/storage
+    environment:
+      # Application
+      - APP_NAME=${APP_NAME:-SendPortal}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=${APP_KEY}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - APP_URL=${APP_URL}
+      
+      # Database (use existing PostgreSQL from Coolify)
+      - DB_CONNECTION=${DB_CONNECTION:-pgsql}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      
+      # Cache & Session
+      - CACHE_DRIVER=${CACHE_DRIVER:-redis}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
+      - SESSION_LIFETIME=${SESSION_LIFETIME:-120}
+      
+      # Queue
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
+      
+      # Redis (use existing Redis from Coolify if available)
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      
+      # Mail
+      - MAIL_MAILER=${MAIL_MAILER:-smtp}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-${APP_NAME}}
+      
+      # SendPortal Settings
+      - SENDPORTAL_REGISTER=${SENDPORTAL_REGISTER:-false}
+      - SENDPORTAL_PASSWORD_RESET=${SENDPORTAL_PASSWORD_RESET:-true}
+      
+      # Docker specific - Always run migrations in Coolify
+      - RUN_MIGRATIONS=true
+      - PUBLISH_VENDOR=true
+    ports:
+      - "${PORT:-80}:9000"
+    healthcheck:
+      test: ["CMD", "php", "-r", "file_exists('/var/www/html/storage/app/health') || exit(1);"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
