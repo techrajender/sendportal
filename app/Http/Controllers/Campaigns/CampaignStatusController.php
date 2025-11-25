@@ -161,12 +161,53 @@ class CampaignStatusController extends Controller
                 return response()->json(['error' => 'Campaign not found'], 404);
             }
 
-            // Only allow reprocessing campaigns that are in queued status
-            if (!$campaign->queued) {
+            // Allow reprocessing campaigns that are in queued or stuck in sending status
+            if (!$campaign->queued && !$campaign->sending) {
                 return response()->json([
-                    'error' => 'Campaign is not in queued status. Only queued campaigns can be reprocessed.',
+                    'error' => 'Campaign is not in queued or sending status. Only queued or stuck sending campaigns can be reprocessed.',
                     'current_status' => $campaign->status->name ?? 'Unknown'
                 ], 400);
+            }
+            
+            // If campaign is in sending status, check if it's stuck
+            if ($campaign->sending) {
+                $totalMessages = \Sendportal\Base\Models\Message::where('source_id', $campaign->id)
+                    ->where('source_type', \Sendportal\Base\Models\Campaign::class)
+                    ->count();
+                
+                $sentMessages = \Sendportal\Base\Models\Message::where('source_id', $campaign->id)
+                    ->where('source_type', \Sendportal\Base\Models\Campaign::class)
+                    ->whereNotNull('sent_at')
+                    ->count();
+                
+                // Check if campaign is actually stuck
+                $isStuck = false;
+                if ($totalMessages > 0 && $sentMessages === 0) {
+                    // Has messages but none sent - definitely stuck
+                    $isStuck = true;
+                } elseif ($totalMessages > 0 && $sentMessages < $totalMessages) {
+                    // Check if updated more than 5 minutes ago
+                    $minutesSinceUpdate = $campaign->updated_at ? now()->diffInMinutes($campaign->updated_at) : 0;
+                    if ($minutesSinceUpdate > 5) {
+                        $isStuck = true;
+                    }
+                }
+                
+                if (!$isStuck) {
+                    return response()->json([
+                        'error' => 'Campaign is still processing. Please wait for it to complete.',
+                        'current_status' => $campaign->status->name ?? 'Unknown',
+                        'total_messages' => $totalMessages,
+                        'sent_messages' => $sentMessages
+                    ], 400);
+                }
+                
+                Log::info('Reprocessing stuck sending campaign', [
+                    'campaign_id' => $campaign->id,
+                    'campaign_name' => $campaign->name,
+                    'total_messages' => $totalMessages,
+                    'sent_messages' => $sentMessages,
+                ]);
             }
 
             // Check recipient count before processing
@@ -190,12 +231,48 @@ class CampaignStatusController extends Controller
                 'campaign_name' => $campaign->name,
                 'status_id' => $campaign->status_id,
                 'recipient_count' => $recipientCount,
+                'is_sending' => $campaign->sending,
             ]);
 
-            // Ensure campaign is in queued status before dispatching
+            // If campaign is in sending status, delete unsent messages to allow reprocessing
+            if ($campaign->sending) {
+                $unsentMessages = \Sendportal\Base\Models\Message::where('source_id', $campaign->id)
+                    ->where('source_type', \Sendportal\Base\Models\Campaign::class)
+                    ->whereNull('sent_at')
+                    ->get();
+                
+                $unsentCount = $unsentMessages->count();
+                
+                if ($unsentCount > 0) {
+                    Log::info('Deleting unsent messages before reprocessing', [
+                        'campaign_id' => $campaign->id,
+                        'unsent_messages_count' => $unsentCount,
+                        'message_ids' => $unsentMessages->pluck('id')->toArray(),
+                    ]);
+                    
+                    // Delete all unsent messages - this will allow canSendToSubscriber to return true
+                    // and create fresh messages for these subscribers
+                    foreach ($unsentMessages as $message) {
+                        $message->delete();
+                    }
+                    
+                    Log::info('Deleted unsent messages', [
+                        'campaign_id' => $campaign->id,
+                        'deleted_count' => $unsentCount,
+                    ]);
+                }
+            }
+
+            // Reset campaign to queued status before dispatching (for both queued and stuck sending campaigns)
             if ($campaign->status_id !== CampaignStatus::STATUS_QUEUED) {
                 $campaign->status_id = CampaignStatus::STATUS_QUEUED;
                 $campaign->save();
+                
+                Log::info('Campaign status reset to queued for reprocessing', [
+                    'campaign_id' => $campaign->id,
+                    'old_status_id' => $campaign->getOriginal('status_id'),
+                    'new_status_id' => CampaignStatus::STATUS_QUEUED,
+                ]);
             }
 
             // Dispatch the campaign (this will process the campaign and queue message dispatch jobs)
