@@ -11,7 +11,8 @@ class ExtendedCompleteCampaign extends BaseCompleteCampaign
 {
     /**
      * Mark the campaign as complete in the database
-     * Override to check for 0 messages and mark as sent immediately
+     * Override to set status to "sending" when messages are created, not "sent"
+     * Campaign will be marked as "sent" only after all messages are actually sent
      *
      * @param Campaign $campaign
      * @return void
@@ -33,8 +34,16 @@ class ExtendedCompleteCampaign extends BaseCompleteCampaign
             $campaign->status_id = CampaignStatus::STATUS_SENT;
             $campaign->save();
         } else {
-            // Use parent implementation for campaigns with messages
-            parent::markCampaignAsComplete($campaign);
+            // Set status to "sending" instead of "sent"
+            // Campaign will be marked as "sent" only after all messages are actually sent
+            \Illuminate\Support\Facades\Log::info('Campaign messages created, setting status to sending', [
+                'campaign_id' => $campaign->id,
+                'campaign_name' => $campaign->name,
+                'total_messages' => $totalMessages,
+            ]);
+
+            $campaign->status_id = CampaignStatus::STATUS_SENDING;
+            $campaign->save();
         }
     }
 }
