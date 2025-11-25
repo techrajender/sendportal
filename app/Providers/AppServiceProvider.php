@@ -76,6 +76,9 @@ class AppServiceProvider extends ServiceProvider
         // Register Message observer to filter excluded subscribers
         \Sendportal\Base\Models\Message::observe(\App\Observers\MessageObserver::class);
 
+        // Register Campaign observer to automatically queue dispatch jobs when status changes to queued
+        \Sendportal\Base\Models\Campaign::observe(\App\Observers\CampaignObserver::class);
+
         Sendportal::setCurrentWorkspaceIdResolver(
             static function () {
                 /** @var User $user */

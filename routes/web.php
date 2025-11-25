@@ -127,6 +127,10 @@ Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
         Route::put('campaigns/{id}/status', [App\Http\Controllers\Campaigns\CampaignStatusController::class, 'update'])
             ->name('sendportal.campaigns.status.update');
         
+        // Campaign reprocess route for stuck campaigns
+        Route::post('campaigns/{id}/reprocess', [App\Http\Controllers\Campaigns\CampaignStatusController::class, 'reprocess'])
+            ->name('sendportal.campaigns.reprocess');
+        
         // Campaign recipients route
         Route::post('campaigns/{id}/recipients', [App\Http\Controllers\Campaigns\CampaignRecipientsController::class, 'getRecipients'])
             ->name('sendportal.campaigns.recipients.get');

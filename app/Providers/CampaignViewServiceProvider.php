@@ -124,6 +124,77 @@ class CampaignViewServiceProvider extends ServiceProvider
                 $view->with('excludedCampaignIds', []);
             }
         });
+
+        // Add recipient count to campaign status view
+        View::composer('sendportal::campaigns.status', function ($view) use ($exclusionService) {
+            try {
+                $viewData = $view->getData();
+                $campaign = $viewData['campaign'] ?? null;
+                
+                if ($campaign) {
+                    $recipientCount = 0;
+
+                    if ($campaign->send_to_all) {
+                        // Count all active subscribers in workspace
+                        $subscriberIds = \Sendportal\Base\Models\Subscriber::where('workspace_id', $campaign->workspace_id)
+                            ->whereNull('unsubscribed_at')
+                            ->pluck('id')
+                            ->toArray();
+                        $recipientCount = count($subscriberIds);
+                    } else {
+                        // Count unique subscribers across all selected tags
+                        $subscriberIds = [];
+                        foreach ($campaign->tags as $tag) {
+                            $tagSubscriberIds = $tag->subscribers()
+                                ->whereNull('unsubscribed_at')
+                                ->pluck('sendportal_subscribers.id')
+                                ->toArray();
+                            $subscriberIds = array_merge($subscriberIds, $tagSubscriberIds);
+                        }
+                        $recipientCount = count(array_unique($subscriberIds));
+                    }
+
+                    // Apply exclusion filter if exclusions exist
+                    $excludedCampaignIds = CampaignExclusion::where('campaign_id', $campaign->id)
+                        ->pluck('excluded_campaign_id')
+                        ->toArray();
+
+                    if (!empty($excludedCampaignIds) && $recipientCount > 0) {
+                        $excludedSubscriberIds = $exclusionService->getExcludedSubscriberIds($excludedCampaignIds);
+
+                        if ($campaign->send_to_all) {
+                            $allSubscriberIds = \Sendportal\Base\Models\Subscriber::where('workspace_id', $campaign->workspace_id)
+                                ->whereNull('unsubscribed_at')
+                                ->pluck('id')
+                                ->toArray();
+                            $excludedCount = count(array_intersect($allSubscriberIds, $excludedSubscriberIds));
+                        } else {
+                            $subscriberIds = [];
+                            foreach ($campaign->tags as $tag) {
+                                $tagSubscriberIds = $tag->subscribers()
+                                    ->whereNull('unsubscribed_at')
+                                    ->pluck('sendportal_subscribers.id')
+                                    ->toArray();
+                                $subscriberIds = array_merge($subscriberIds, $tagSubscriberIds);
+                            }
+                            $uniqueSubscriberIds = array_unique($subscriberIds);
+                            $excludedCount = count(array_intersect($uniqueSubscriberIds, $excludedSubscriberIds));
+                        }
+
+                        $recipientCount = max(0, $recipientCount - $excludedCount);
+                    }
+
+                    $view->with('recipientCount', $recipientCount);
+                } else {
+                    $view->with('recipientCount', 0);
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('Error calculating recipient count for status view', [
+                    'error' => $e->getMessage()
+                ]);
+                $view->with('recipientCount', 0);
+            }
+        });
     }
 }
 
