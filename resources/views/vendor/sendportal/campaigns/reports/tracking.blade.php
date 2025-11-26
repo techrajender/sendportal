@@ -102,6 +102,7 @@
                         <th class="text-center">{{ __('Thank You') }}</th>
                         <th class="text-center">{{ __('Asset Downloaded') }}</th>
                         <th class="text-center">{{ __('Last Activity') }}</th>
+                        <th class="text-center">{{ __('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -275,10 +276,18 @@
                                     <span class="text-muted">-</span>
                                 @endif
                             </td>
+                            <td class="text-center">
+                                <a href="javascript:void(0)" 
+                                   class="text-primary" 
+                                   onclick="openGenerateClickDrawer({{ $campaign->id }}, '{{ $subscriber->hash }}', '{{ $subscriber->email }}', {{ json_encode(array_keys($events)) }})"
+                                   style="font-size: 1.2rem; display: inline-block; padding: 0.25rem;">
+                                    <i class="fas fa-cog"></i>
+                                </a>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="text-center">
+                            <td colspan="10" class="text-center">
                                 <p class="empty-table-text">{{ __('No tracking data available yet.') }}</p>
                                 <p class="text-muted">{{ __('Tracking data will appear here once emails are sent and subscribers interact with the campaign.') }}</p>
                             </td>
@@ -296,7 +305,7 @@
         <div class="tracking-drawer-overlay" onclick="closeTrackingDrawer()"></div>
         <div class="tracking-drawer-content">
             <div class="tracking-drawer-header">
-                <h5 class="mb-0">{{ __('Tracking Event Details') }}</h5>
+                <h5 class="mb-0" id="trackingDrawerTitle">{{ __('Tracking Event Details') }}</h5>
                 <button type="button" class="btn btn-sm btn-link text-muted" onclick="closeTrackingDrawer()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -383,6 +392,40 @@
         .gap-1 {
             gap: 4px;
         }
+        .generate-link-btn {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: geometricPrecision;
+            border: none;
+            background: transparent;
+            outline: none;
+            position: relative;
+            padding: 0.25rem;
+        }
+        .generate-link-btn:hover {
+            opacity: 0.7;
+            color: #0056b3 !important;
+        }
+        .generate-link-btn:hover i {
+            text-shadow: none;
+        }
+        .generate-link-btn:active {
+            opacity: 0.5;
+        }
+        .generate-link-btn:focus {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
+            border-radius: 2px;
+        }
+        .generate-link-btn i {
+            display: inline-block;
+            vertical-align: middle;
+            line-height: 1;
+            font-weight: normal;
+            text-rendering: geometricPrecision;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
         #toggle-filters-btn.active {
             background-color: #007bff;
             color: white;
@@ -439,6 +482,10 @@
 
         const drawer = document.getElementById('trackingDrawer');
         const drawerBody = document.getElementById('trackingDrawerBody');
+        const drawerTitle = document.getElementById('trackingDrawerTitle');
+        
+        // Reset title to default
+        drawerTitle.textContent = '{{ __("Tracking Event Details") }}';
 
         // Get task type labels
         const taskTypeLabels = {
@@ -567,6 +614,569 @@
     $(document).ready(function() {
         $('[data-toggle="tooltip"]').tooltip();
     });
+
+    // Variables to store drawer data
+    let currentCampaignId = null;
+    let currentSubscriberHash = null;
+    
+    // Task type labels
+    const taskTypeLabels = {
+        1: '{{ __("email_sent") }}',
+        2: '{{ __("email_opened") }}',
+        3: '{{ __("email_clicked") }}',
+        4: '{{ __("newsletter_opened") }}',
+        5: '{{ __("landing_page_opened") }}',
+        6: '{{ __("thank_you_received") }}',
+        7: '{{ __("asset_downloaded") }}'
+    };
+    
+    function updateTaskNumber() {
+        const taskNumberSelect = document.getElementById('taskNumber');
+        const taskSuffixInput = document.getElementById('taskSuffix');
+        const displayTaskNumber = document.getElementById('displayTaskNumber');
+        const displayTaskType = document.getElementById('displayTaskType');
+        const linkTaskNumber = document.getElementById('linkTaskNumber');
+        
+        if (!taskNumberSelect) return;
+        
+        // Get the selected option's value to ensure we have the correct value
+        const selectedOption = taskNumberSelect.options[taskNumberSelect.selectedIndex];
+        const taskNumber = selectedOption ? String(selectedOption.value) : String(taskNumberSelect.value || '3');
+        const suffix = taskSuffixInput ? taskSuffixInput.value.trim() : '';
+        const fullTaskNumber = suffix ? `${taskNumber}${suffix}` : taskNumber;
+        
+        console.log('updateTaskNumber - Task Number:', taskNumber);
+        console.log('updateTaskNumber - Full Task Number:', fullTaskNumber);
+        
+        if (displayTaskNumber) {
+            displayTaskNumber.textContent = fullTaskNumber;
+        }
+        if (displayTaskType) {
+            // Use numeric index for taskTypeLabels
+            const taskNum = parseInt(taskNumber, 10);
+            displayTaskType.textContent = `(${taskTypeLabels[taskNum] || ''})`;
+        }
+        if (linkTaskNumber) {
+            linkTaskNumber.textContent = fullTaskNumber;
+        }
+        
+        // Always regenerate the tracking link when task number changes
+        generateTrackingLink();
+    }
+
+    function openGenerateClickDrawer(campaignId, subscriberHash, subscriberEmail, completedTasks, preferredTaskNumber) {
+        currentCampaignId = campaignId;
+        currentSubscriberHash = subscriberHash;
+        
+        const drawer = document.getElementById('trackingDrawer');
+        const drawerBody = document.getElementById('trackingDrawerBody');
+        const drawerTitle = document.getElementById('trackingDrawerTitle');
+        
+        // Update title
+        drawerTitle.textContent = '{{ __("Generate Click Tracking Link") }}';
+        
+        // Determine default task number - use preferredTaskNumber if provided, otherwise default to 3
+        const defaultTaskNumber = preferredTaskNumber || 3;
+        
+        // Build task number options - show all tasks (1-7)
+        let taskOptionsHtml = '';
+        for (let i = 1; i <= 7; i++) {
+            const isSelected = (i === defaultTaskNumber) ? ' selected' : '';
+            const taskLabel = taskTypeLabels[i] || '';
+            taskOptionsHtml += `<option value="${String(i)}"${isSelected}>${i} - ${taskLabel}</option>`;
+        }
+        
+        // Build HTML content for generate link form
+        const appUrl = '{{ config("app.url") }}';
+        let html = `
+            <div class="tracking-detail-item">
+                <div class="tracking-detail-label">{{ __('Subscriber') }}</div>
+                <div class="tracking-detail-value">${subscriberEmail}</div>
+            </div>
+            <div class="tracking-detail-item">
+                <div class="tracking-detail-label">{{ __('Link Components') }}</div>
+                <div style="margin-top: 0.5rem; padding: 0.75rem; background: #f8f9fa; border-radius: 4px; font-size: 0.8rem;">
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong>{{ __('App URL') }}:</strong><br>
+                        <code style="color: #0066cc; word-break: break-all;">${appUrl}</code>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong>{{ __('Campaign Hash') }}:</strong><br>
+                        <code style="color: #0066cc;">${campaignId}</code>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong>{{ __('Subscriber Hash') }}:</strong><br>
+                        <code style="color: #0066cc; word-break: break-all; font-size: 0.75rem;">${subscriberHash}</code>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong>{{ __('Task Number') }}:</strong><br>
+                        <code style="color: #0066cc;" id="displayTaskNumber">${defaultTaskNumber}</code> <span style="color: #666; font-size: 0.75rem;" id="displayTaskType">(${taskTypeLabels[defaultTaskNumber] || ''})</span>
+                    </div>
+                    <div id="redirectUrlDisplay" style="display: none; margin-bottom: 0;">
+                        <strong>{{ __('Redirect URL') }}:</strong><br>
+                        <code style="color: #0066cc; word-break: break-all; font-size: 0.75rem;" id="redirectUrlCode"></code>
+                    </div>
+                </div>
+            </div>
+            <div class="tracking-detail-item">
+                <div class="tracking-detail-label">{{ __('Task Number') }}</div>
+                <div class="row" style="margin-top: 0.5rem;">
+                    <div class="col-6">
+                        <select class="form-control form-control-sm" id="taskNumber" onchange="updateTaskNumber()">
+                            ${taskOptionsHtml}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <input type="text" 
+                               class="form-control form-control-sm" 
+                               id="taskSuffix" 
+                               placeholder="-001 (optional)"
+                               oninput="updateTaskNumber()"
+                               style="font-size: 0.75rem;">
+                        <small class="form-text text-muted" style="font-size: 0.65rem; margin-top: 0.25rem;">
+                            {{ __('Optional suffix like -001, -002') }}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="tracking-detail-item">
+                <div class="tracking-detail-label">
+                    {{ __('Redirect URL') }} <span class="text-danger">*</span>
+                    <button type="button" 
+                            class="btn btn-sm btn-link p-0 ml-2" 
+                            onclick="appendDefaultQueryStrings()"
+                            style="font-size: 0.7rem; vertical-align: baseline;"
+                            title="{{ __('Add default query strings') }}">
+                        <i class="fas fa-plus-circle text-primary"></i> {{ __('Add Default Query Strings') }}
+                    </button>
+                </div>
+                <textarea class="form-control form-control-sm" 
+                       id="redirectUrl" 
+                       placeholder="https://unisonwavepromote.com/001/sniffr-002"
+                       required
+                       rows="3"
+                       style="margin-top: 0.5rem; font-size: 0.75rem;"></textarea>
+                <small class="form-text text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
+                    The URL to redirect to after tracking. You can use merge tags like <code>&#123;&#123; app_url &#125;&#125;</code>, <code>&#123;&#123; campaign_hash &#125;&#125;</code>, <code>&#123;&#123; subscriber_hash &#125;&#125;</code> which will be replaced when the email is sent.
+                    <br>
+                    <strong>Default query strings:</strong> <code>app_url=&#123;&#123; app_url &#125;&#125;&amp;campaign_hash=&#123;&#123; campaign_hash &#125;&#125;&amp;subscriber_hash=&#123;&#123; subscriber_hash &#125;&#125;&amp;token=5</code>
+                </small>
+            </div>
+            <div class="tracking-detail-item">
+                <div class="tracking-detail-label">{{ __('Generated Tracking Link') }}</div>
+                <div class="input-group" style="margin-top: 0.5rem;">
+                    <input type="text" 
+                           class="form-control form-control-sm" 
+                           id="generatedLink" 
+                           readonly
+                           style="font-size: 0.75rem;">
+                    <div class="input-group-append">
+                        <button class="btn btn-sm btn-outline-secondary" 
+                                type="button" 
+                                onclick="copyGeneratedLink()"
+                                style="font-size: 0.75rem;">
+                            <i class="fas fa-copy"></i> {{ __('Copy') }}
+                        </button>
+                    </div>
+                </div>
+                <div style="margin-top: 0.5rem; font-size: 0.7rem; color: #666;">
+                    <strong>{{ __('Link Format') }}:</strong><br>
+                    <code style="font-size: 0.65rem; word-break: break-all; display: block; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; margin-top: 0.25rem;">${appUrl}/api/track/<span id="linkCampaignId">${campaignId}</span>/<span id="linkSubscriberHash">${subscriberHash}</span>/<span id="linkTaskNumber">3</span>?redirect=<span id="linkRedirectUrl">...</span></code>
+                </div>
+                <div style="margin-top: 0.5rem; font-size: 0.65rem; color: #666; padding: 0.5rem; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+                    <strong>{{ __('Note') }}:</strong> Merge tags in the redirect URL (like <code>&#123;&#123; app_url &#125;&#125;</code>, <code>&#123;&#123; campaign_hash &#125;&#125;</code>, <code>&#123;&#123; subscriber_hash &#125;&#125;</code>) will be preserved and replaced when the email is sent.
+                </div>
+            </div>
+            <div class="tracking-detail-item" style="border-bottom: none; padding-bottom: 0;">
+                <button type="button" 
+                        class="btn btn-primary btn-sm" 
+                        onclick="submitTrackingRequest()"
+                        style="width: 100%; margin-top: 1rem;">
+                    <i class="fas fa-paper-plane"></i> {{ __('Submit Tracking Request') }}
+                </button>
+            </div>
+        `;
+        
+        drawerBody.innerHTML = html;
+        drawer.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        
+        // Generate initial tracking link with default task number
+        setTimeout(() => {
+            const redirectInput = document.getElementById('redirectUrl');
+            const taskNumberSelect = document.getElementById('taskNumber');
+            const taskSuffixInput = document.getElementById('taskSuffix');
+            
+            // Generate initial link (even without redirect URL)
+            generateTrackingLink();
+            
+            if (redirectInput) {
+                redirectInput.addEventListener('input', function() {
+                    generateTrackingLink();
+                });
+            }
+            
+            if (taskNumberSelect) {
+                taskNumberSelect.addEventListener('change', function() {
+                    updateTaskNumber();
+                    generateTrackingLink();
+                });
+            }
+            
+            if (taskSuffixInput) {
+                taskSuffixInput.addEventListener('input', function() {
+                    updateTaskNumber();
+                    generateTrackingLink();
+                });
+            }
+        }, 100);
+    }
+
+    function generateTrackingLink() {
+        const redirectUrlInput = document.getElementById('redirectUrl');
+        const linkInput = document.getElementById('generatedLink');
+        const redirectUrlDisplay = document.getElementById('redirectUrlDisplay');
+        const redirectUrlCode = document.getElementById('redirectUrlCode');
+        const linkRedirectUrl = document.getElementById('linkRedirectUrl');
+        const taskNumberSelect = document.getElementById('taskNumber');
+        const taskSuffixInput = document.getElementById('taskSuffix');
+        
+        if (!redirectUrlInput || !linkInput) {
+            console.warn('Required elements not found');
+            return;
+        }
+        
+        const redirectUrl = redirectUrlInput.value.trim();
+        console.log('Reading redirect URL from input:', redirectUrl);
+        
+        // Get task number and suffix - ensure we get the actual selected value
+        let taskNumber = '3'; // default
+        if (taskNumberSelect) {
+            // Get the selected option's value
+            const selectedOption = taskNumberSelect.options[taskNumberSelect.selectedIndex];
+            taskNumber = selectedOption ? String(selectedOption.value) : String(taskNumberSelect.value || '3');
+            console.log('Selected option:', selectedOption);
+            console.log('Selected option value:', selectedOption ? selectedOption.value : 'none');
+        }
+        const suffix = taskSuffixInput ? taskSuffixInput.value.trim() : '';
+        const fullTaskNumber = suffix ? `${taskNumber}${suffix}` : taskNumber;
+        
+        // Debug logging
+        console.log('Task Number Select element:', taskNumberSelect);
+        console.log('Task Number Select value:', taskNumberSelect ? taskNumberSelect.value : 'N/A');
+        console.log('Selected Task Number (final):', taskNumber);
+        console.log('Suffix:', suffix);
+        console.log('Full Task Number:', fullTaskNumber);
+        
+        // Generate base tracking URL
+        const appUrl = '{{ config("app.url") }}';
+        let trackingUrl = `${appUrl}/api/track/${currentCampaignId}/${currentSubscriberHash}/${fullTaskNumber}`;
+        
+        // Only add redirect parameter if redirect URL is present
+        if (redirectUrl) {
+            // Don't validate URL if it contains merge tags (they're valid for email templates)
+            const openBrace = '{';
+            const hasMergeTags = redirectUrl.includes(openBrace + openBrace) || redirectUrl.includes(openBrace + '%');
+            
+            if (!hasMergeTags) {
+                // Validate URL only if it doesn't contain merge tags
+                // Extract base URL (without query params) for validation
+                const baseUrl = redirectUrl.split('?')[0];
+                try {
+                    new URL(baseUrl);
+                    // If base URL is valid, the full URL with query params should be fine
+                } catch (e) {
+                    // If validation fails, still allow it (might be a relative URL or special format)
+                    console.warn('URL validation warning:', e);
+                }
+            }
+            
+            // Encode the entire redirect URL (including query parameters)
+            const encodedRedirectUrl = encodeURIComponent(redirectUrl);
+            trackingUrl += `?redirect=${encodedRedirectUrl}`;
+            
+            // Show redirect URL in display
+            if (redirectUrlDisplay) {
+                redirectUrlDisplay.style.display = 'block';
+            }
+            if (redirectUrlCode) {
+                redirectUrlCode.textContent = redirectUrl;
+            }
+            if (linkRedirectUrl) {
+                linkRedirectUrl.textContent = encodedRedirectUrl;
+            }
+        } else {
+            // No redirect URL - hide redirect display
+            if (redirectUrlDisplay) {
+                redirectUrlDisplay.style.display = 'none';
+            }
+            if (linkRedirectUrl) {
+                linkRedirectUrl.textContent = '(no redirect)';
+            }
+        }
+        
+        linkInput.value = trackingUrl;
+        
+        // Debug: log the generated URL to console
+        console.log('Generated tracking URL:', trackingUrl);
+        console.log('Redirect URL:', redirectUrl || '(none)');
+        
+        // Update redirect URL display in components section
+        if (redirectUrlDisplay) {
+            redirectUrlDisplay.style.display = 'block';
+        }
+        if (redirectUrlCode) {
+            redirectUrlCode.textContent = redirectUrl;
+        }
+        if (linkRedirectUrl) {
+            linkRedirectUrl.textContent = encodedRedirectUrl;
+        }
+    }
+
+    function appendDefaultQueryStrings() {
+        const redirectUrlInput = document.getElementById('redirectUrl');
+        if (!redirectUrlInput) return;
+        
+        // Check if we have the required values
+        if (!currentCampaignId || !currentSubscriberHash) {
+            alert('{{ __("Campaign and subscriber information not available") }}');
+            return;
+        }
+        
+        const currentUrl = redirectUrlInput.value.trim();
+        const appUrl = '{{ config("app.url") }}';
+        
+        // Build query string with actual values instead of merge tags
+        const defaultQueryString = 'app_url=' + encodeURIComponent(appUrl) + 
+                                   '&campaign_hash=' + encodeURIComponent(currentCampaignId) + 
+                                   '&subscriber_hash=' + encodeURIComponent(currentSubscriberHash) + 
+                                   '&token=5';
+        
+        if (!currentUrl) {
+            // If no URL, show a message
+            alert('{{ __("Please enter a base URL first (e.g., https://example.com)") }}');
+            redirectUrlInput.focus();
+            return;
+        }
+        
+        // Check if URL already has query parameters
+        const hasQuery = currentUrl.includes('?');
+        const separator = hasQuery ? '&' : '?';
+        
+        // Check if default query strings are already present
+        if (currentUrl.includes('app_url=')) {
+            // Check if all default params are present
+            const hasAllParams = currentUrl.includes('app_url=') && 
+                                currentUrl.includes('campaign_hash=') && 
+                                currentUrl.includes('subscriber_hash=') && 
+                                currentUrl.includes('token=');
+            if (hasAllParams) {
+                alert('{{ __("Default query strings are already present in the URL") }}');
+                return;
+            }
+        }
+        
+        // Append the default query strings with actual values
+        const updatedUrl = currentUrl + separator + defaultQueryString;
+        redirectUrlInput.value = updatedUrl;
+        
+        // Force a small delay to ensure the input value is updated
+        setTimeout(() => {
+            // Trigger link generation
+            generateTrackingLink();
+        }, 100);
+        
+        // Focus back on the textarea and scroll to show the added content
+        redirectUrlInput.focus();
+        redirectUrlInput.scrollTop = redirectUrlInput.scrollHeight;
+    }
+
+    function copyGeneratedLink() {
+        const linkInput = document.getElementById('generatedLink');
+        if (!linkInput || !linkInput.value) {
+            alert('{{ __('Please generate a link first by entering a redirect URL') }}');
+            return;
+        }
+        
+        linkInput.select();
+        document.execCommand('copy');
+        
+        // Show feedback
+        const copyBtn = event.target.closest('button');
+        if (copyBtn) {
+            const originalHtml = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="fas fa-check"></i> {{ __("Copied!") }}';
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHtml;
+            }, 2000);
+        }
+    }
+
+    function submitTrackingRequest() {
+        const redirectUrlInput = document.getElementById('redirectUrl');
+        const linkInput = document.getElementById('generatedLink');
+        const taskNumberSelect = document.getElementById('taskNumber');
+        const taskSuffixInput = document.getElementById('taskSuffix');
+        
+        if (!redirectUrlInput) return;
+        
+        const redirectUrl = redirectUrlInput.value.trim();
+        
+        if (!redirectUrl) {
+            alert('{{ __('Please enter a redirect URL') }}');
+            return;
+        }
+
+        // Get task number and suffix - ensure it's a string
+        const taskNumber = taskNumberSelect ? String(taskNumberSelect.value) : '3';
+        const suffix = taskSuffixInput ? taskSuffixInput.value.trim() : '';
+        const fullTaskNumber = suffix ? `${taskNumber}${suffix}` : taskNumber;
+        
+        // Debug logging
+        console.log('Submit - Task Number Select:', taskNumberSelect);
+        console.log('Submit - Selected Task Number:', taskNumber);
+        console.log('Submit - Full Task Number:', fullTaskNumber);
+
+        // Don't validate URL if it contains merge tags (they're valid for email templates)
+        const openBrace = '{';
+        const hasMergeTags = redirectUrl.includes(openBrace + openBrace) || redirectUrl.includes(openBrace + '%');
+        
+        if (!hasMergeTags) {
+            // Validate URL only if it doesn't contain merge tags
+            try {
+                new URL(redirectUrl);
+            } catch (e) {
+                alert('{{ __('Please enter a valid URL') }}');
+                return;
+            }
+        }
+
+        // Generate tracking URL if not already generated
+        if (!linkInput || !linkInput.value) {
+            generateTrackingLink();
+        }
+
+        const trackingUrl = linkInput ? linkInput.value : '';
+        if (!trackingUrl) {
+            alert('{{ __('Failed to generate tracking URL') }}');
+            return;
+        }
+        
+        // Show loading state
+        const submitBtn = event.target;
+        const originalHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> {{ __("Submitting...") }}';
+
+        // Submit tracking request
+        // Use the full task number with suffix - API will strip it automatically
+        const appUrl = '{{ config("app.url") }}';
+        const trackingUrlWithoutRedirect = `${appUrl}/api/track/${currentCampaignId}/${currentSubscriberHash}/${fullTaskNumber}`;
+        
+        // Make tracking request using fetch with proper error handling
+        fetch(trackingUrlWithoutRedirect, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+            },
+            mode: 'cors',
+            credentials: 'omit'
+        })
+        .then(response => {
+            // Check content type
+            const contentType = response.headers.get('content-type');
+            
+            // If it's JSON, parse it
+            if (contentType && contentType.includes('application/json')) {
+                return response.json();
+            }
+            
+            // If it's a redirect or other response, check status
+            if (response.ok || response.status === 200) {
+                // Try to get text and parse as JSON
+                return response.text().then(text => {
+                    // Check if it's HTML (error page)
+                    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<!doctype')) {
+                        console.warn('Server returned HTML:', text.substring(0, 200));
+                        // Still consider it a success if status is 200
+                        return { success: true, message: 'Tracking recorded (HTML response)' };
+                    }
+                    // Try to parse as JSON
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        // If not JSON, assume success if status is OK
+                        return { success: true, message: 'Tracking recorded' };
+                    }
+                });
+            }
+            
+            // For other status codes, assume success if it's 2xx
+            if (response.status >= 200 && response.status < 300) {
+                return { success: true, message: 'Tracking recorded' };
+            }
+            
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        })
+        .then(data => {
+            if (data && data.success) {
+                alert('{{ __('Tracking request submitted successfully! The page will refresh to show the updated data.') }}');
+                closeTrackingDrawer();
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                throw new Error(data?.message || 'Tracking failed');
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            console.error('Tracking URL:', trackingUrlWithoutRedirect);
+            
+            // Fallback: Use image element method (more reliable for tracking pixels)
+            console.log('Trying fallback method with image element...');
+            const img = new Image();
+            let requestCompleted = false;
+            
+            img.onload = function() {
+                if (!requestCompleted) {
+                    requestCompleted = true;
+                    alert('{{ __('Tracking request submitted successfully! The page will refresh to show the updated data.') }}');
+                    closeTrackingDrawer();
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                }
+            };
+            
+            img.onerror = function() {
+                // Even if image fails, the request was likely sent
+                if (!requestCompleted) {
+                    requestCompleted = true;
+                    alert('{{ __('Tracking request sent. The page will refresh to verify.') }}');
+                    closeTrackingDrawer();
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                }
+            };
+            
+            // Set timeout
+            setTimeout(() => {
+                if (!requestCompleted) {
+                    requestCompleted = true;
+                    alert('{{ __('Tracking request sent. The page will refresh to verify.') }}');
+                    closeTrackingDrawer();
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                }
+            }, 3000);
+            
+            // Trigger tracking with image element
+            img.src = trackingUrlWithoutRedirect;
+        });
+    }
 </script>
 @endpush
 
