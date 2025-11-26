@@ -163,11 +163,25 @@ class TrackingController extends Controller
             'campaign_id' => $tracking->campaign_id,
         ]);
 
-        // For click tracking with redirect parameter, redirect to the destination URL
-        if ($taskType === 'email_clicked' && $request->has('redirect')) {
+        // Cascading update: Check and update previous tasks if not already tracked
+        $this->updatePreviousTasks($campaignId, $subscriberHash, $taskNumber, $request);
+
+        // Handle redirect parameter - redirect to destination URL if provided
+        // This works for any task type (not just email_clicked)
+        if ($request->has('redirect')) {
             $redirectUrl = $request->get('redirect');
             if ($redirectUrl && filter_var($redirectUrl, FILTER_VALIDATE_URL)) {
+                \Illuminate\Support\Facades\Log::info('Redirecting after tracking', [
+                    'campaign_id' => $campaignId,
+                    'subscriber_hash' => $subscriberHash,
+                    'task_type' => $taskType,
+                    'redirect_url' => $redirectUrl,
+                ]);
                 return redirect($redirectUrl);
+            } else {
+                \Illuminate\Support\Facades\Log::warning('Invalid redirect URL', [
+                    'redirect_url' => $redirectUrl,
+                ]);
             }
         }
 
@@ -249,6 +263,80 @@ class TrackingController extends Controller
             ->header('Access-Control-Allow-Headers', 'Content-Type, Accept')
             ->header('Access-Control-Max-Age', '86400')
             ->header('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+
+    /**
+     * Update previous tasks if they haven't been tracked yet
+     * When a higher-numbered task is triggered, automatically track missing lower-numbered tasks
+     * 
+     * @param int $campaignId
+     * @param string $subscriberHash
+     * @param int $currentTaskNumber
+     * @param Request $request
+     * @return void
+     */
+    protected function updatePreviousTasks(int $campaignId, string $subscriberHash, int $currentTaskNumber, Request $request): void
+    {
+        // Only process if current task number is greater than 1
+        if ($currentTaskNumber <= 1) {
+            return;
+        }
+
+        // Get device information from current request (reuse for previous tasks)
+        $userAgent = $request->userAgent();
+        $ipAddress = $request->ip();
+        $deviceType = DeviceHelper::detectDeviceType($userAgent);
+        $browser = DeviceHelper::detectBrowser($userAgent);
+        $os = DeviceHelper::detectOS($userAgent);
+
+        $deviceMetadata = [
+            'browser' => $browser,
+            'ip_address' => $ipAddress,
+            'device_type' => $deviceType,
+            'os' => $os,
+            'user_agent' => $userAgent,
+        ];
+
+        // Check all previous tasks (from 1 to currentTaskNumber - 1)
+        for ($taskNum = 1; $taskNum < $currentTaskNumber; $taskNum++) {
+            if (!isset(self::TASK_MAP[$taskNum])) {
+                continue;
+            }
+
+            $previousTaskType = self::TASK_MAP[$taskNum];
+
+            // Check if this task has already been tracked
+            $existing = \App\Models\CampaignSubscriberTracking::where('campaign_id', $campaignId)
+                ->where('subscriber_hash', $subscriberHash)
+                ->where('task_type', $previousTaskType)
+                ->first();
+
+            // If not tracked yet, track it now
+            if (!$existing) {
+                \Illuminate\Support\Facades\Log::info('Auto-tracking previous task', [
+                    'campaign_id' => $campaignId,
+                    'subscriber_hash' => $subscriberHash,
+                    'previous_task_number' => $taskNum,
+                    'previous_task_type' => $previousTaskType,
+                    'triggered_by_task_number' => $currentTaskNumber,
+                ]);
+
+                // Determine appropriate status based on task type
+                $status = 'opened';
+                if ($previousTaskType === 'email_sent') {
+                    $status = 'opened'; // email_sent is typically auto-tracked, but if missing, mark as opened
+                }
+
+                // Track the previous task
+                $this->trackingService->track(
+                    $campaignId,
+                    $subscriberHash,
+                    $previousTaskType,
+                    $status,
+                    ['device_info' => $deviceMetadata, 'auto_tracked' => true, 'triggered_by' => self::TASK_MAP[$currentTaskNumber]]
+                );
+            }
+        }
     }
 
     /**
