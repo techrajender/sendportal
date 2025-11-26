@@ -142,3 +142,8 @@ Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
 );
 
 Sendportal::publicWebRoutes();
+
+// Public font proxy route (no auth required) - allows unisonwavepromote.com to load fonts
+Route::match(['GET', 'OPTIONS'], 'fonts/proxy', [App\Http\Controllers\FontProxyController::class, 'proxy'])
+    ->name('fonts.proxy.public');
+Route::options('fonts/proxy', [App\Http\Controllers\FontProxyController::class, 'options']);
