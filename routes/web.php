@@ -62,6 +62,8 @@ Route::namespace('Workspaces')
     ->group(
         static function (Router $workspacesRouter) {
             $workspacesRouter->get('/', 'WorkspaceUsersController@index')->name('index');
+            $workspacesRouter->put('{userId}', 'WorkspaceUsersController@update')->name('update');
+            $workspacesRouter->post('{userId}/reset-password', 'WorkspaceUsersController@resetPassword')->name('reset-password');
             $workspacesRouter->delete('{userId}', 'WorkspaceUsersController@destroy')->name('destroy');
 
             // Invitations.
