@@ -137,7 +137,7 @@
                         <tr>
                             <td>
                                 <strong class="subscriber-email" data-email="{{ $subscriber->email }}">{{ $subscriber->email }}</strong><br>
-                                <small class="text-muted">
+                                <small class="text-muted subscriber-name" data-first-name="{{ $subscriber->first_name }}" data-last-name="{{ $subscriber->last_name }}">
                                     {{ $subscriber->first_name }} {{ $subscriber->last_name }}
                                 </small>
                             </td>
@@ -491,10 +491,30 @@
         return maskedLocal + '@' + maskedDomain + '.' + tld;
     }
     
+    function maskName(firstName, lastName) {
+        let maskedFirst = '';
+        let maskedLast = '';
+        
+        if (firstName) {
+            maskedFirst = firstName.length > 2 
+                ? firstName.substring(0, 2) + '***' 
+                : firstName.substring(0, 1) + '***';
+        }
+        
+        if (lastName) {
+            maskedLast = lastName.length > 2 
+                ? lastName.substring(0, 2) + '***' 
+                : lastName.substring(0, 1) + '***';
+        }
+        
+        return (maskedFirst + ' ' + maskedLast).trim();
+    }
+    
     function toggleEmailMask() {
         emailMasked = !emailMasked;
         const maskIcon = document.getElementById('mask-icon');
         const emailElements = document.querySelectorAll('.subscriber-email');
+        const nameElements = document.querySelectorAll('.subscriber-name');
         
         if (emailMasked) {
             // Mask on
@@ -504,6 +524,11 @@
                 const originalEmail = el.getAttribute('data-email');
                 el.textContent = maskEmail(originalEmail);
             });
+            nameElements.forEach(el => {
+                const firstName = el.getAttribute('data-first-name') || '';
+                const lastName = el.getAttribute('data-last-name') || '';
+                el.textContent = maskName(firstName, lastName);
+            });
         } else {
             // Mask off
             maskIcon.classList.remove('fa-eye-slash');
@@ -511,6 +536,11 @@
             emailElements.forEach(el => {
                 const originalEmail = el.getAttribute('data-email');
                 el.textContent = originalEmail;
+            });
+            nameElements.forEach(el => {
+                const firstName = el.getAttribute('data-first-name') || '';
+                const lastName = el.getAttribute('data-last-name') || '';
+                el.textContent = (firstName + ' ' + lastName).trim();
             });
         }
     }
@@ -522,6 +552,12 @@
             emailElements.forEach(el => {
                 const originalEmail = el.getAttribute('data-email');
                 el.textContent = maskEmail(originalEmail);
+            });
+            const nameElements = document.querySelectorAll('.subscriber-name');
+            nameElements.forEach(el => {
+                const firstName = el.getAttribute('data-first-name') || '';
+                const lastName = el.getAttribute('data-last-name') || '';
+                el.textContent = maskName(firstName, lastName);
             });
         }
     });
