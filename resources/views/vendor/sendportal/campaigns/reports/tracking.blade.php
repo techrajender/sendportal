@@ -28,7 +28,6 @@
                             onclick="toggleEmailMask()"
                             title="{{ __('Mask/Unmask Emails') }}">
                         <i class="fas fa-eye-slash" id="mask-icon"></i>
-                        <span id="mask-status">{{ __('Mask On') }}</span>
                     </button>
                     <button type="button" 
                             class="btn btn-sm btn-light" 
@@ -446,9 +445,6 @@
         #toggle-mask-btn {
             font-size: 0.875rem;
         }
-        #toggle-mask-btn #mask-status {
-            margin-left: 0.25rem;
-        }
         #filters-section {
             transition: all 0.3s ease;
         }
@@ -497,16 +493,13 @@
     
     function toggleEmailMask() {
         emailMasked = !emailMasked;
-        const maskBtn = document.getElementById('toggle-mask-btn');
         const maskIcon = document.getElementById('mask-icon');
-        const maskStatus = document.getElementById('mask-status');
         const emailElements = document.querySelectorAll('.subscriber-email');
         
         if (emailMasked) {
             // Mask on
             maskIcon.classList.remove('fa-eye');
             maskIcon.classList.add('fa-eye-slash');
-            maskStatus.textContent = '{{ __("Mask On") }}';
             emailElements.forEach(el => {
                 const originalEmail = el.getAttribute('data-email');
                 el.textContent = maskEmail(originalEmail);
@@ -515,7 +508,6 @@
             // Mask off
             maskIcon.classList.remove('fa-eye-slash');
             maskIcon.classList.add('fa-eye');
-            maskStatus.textContent = '{{ __("Mask Off") }}';
             emailElements.forEach(el => {
                 const originalEmail = el.getAttribute('data-email');
                 el.textContent = originalEmail;
