@@ -14,7 +14,6 @@ npm-debug.log
 yarn-error.log
 .idea
 public/vendor/
-resources/lang/vendor/
 composer.lock
 phpunit.xml
 
