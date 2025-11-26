@@ -23,6 +23,14 @@
                         <i class="fas fa-filter" id="filter-icon"></i>
                     </button>
                     <button type="button" 
+                            class="btn btn-sm btn-light mr-2" 
+                            id="toggle-mask-btn"
+                            onclick="toggleEmailMask()"
+                            title="{{ __('Mask/Unmask Emails') }}">
+                        <i class="fas fa-eye-slash" id="mask-icon"></i>
+                        <span id="mask-status">{{ __('Mask On') }}</span>
+                    </button>
+                    <button type="button" 
                             class="btn btn-sm btn-light" 
                             id="refresh-tracking-btn"
                             onclick="refreshTrackingData()"
@@ -129,7 +137,7 @@
                         @endphp
                         <tr>
                             <td>
-                                <strong>{{ $subscriber->email }}</strong><br>
+                                <strong class="subscriber-email" data-email="{{ $subscriber->email }}">{{ $subscriber->email }}</strong><br>
                                 <small class="text-muted">
                                     {{ $subscriber->first_name }} {{ $subscriber->last_name }}
                                 </small>
@@ -435,6 +443,12 @@
             background-color: #0056b3;
             border-color: #0056b3;
         }
+        #toggle-mask-btn {
+            font-size: 0.875rem;
+        }
+        #toggle-mask-btn #mask-status {
+            margin-left: 0.25rem;
+        }
         #filters-section {
             transition: all 0.3s ease;
         }
@@ -461,6 +475,64 @@
             toggleFilters();
         });
     @endif
+
+    // Email masking functionality
+    let emailMasked = true; // Default: mask on
+    
+    function maskEmail(email) {
+        if (!email || !email.includes('@')) {
+            return email;
+        }
+        const [localPart, domain] = email.split('@');
+        const maskedLocal = localPart.length > 2 
+            ? localPart.substring(0, 2) + '***' 
+            : localPart.substring(0, 1) + '***';
+        const [domainName, ...tldParts] = domain.split('.');
+        const maskedDomain = domainName.length > 2 
+            ? domainName.substring(0, 2) + '***' 
+            : domainName.substring(0, 1) + '***';
+        const tld = tldParts.join('.');
+        return maskedLocal + '@' + maskedDomain + '.' + tld;
+    }
+    
+    function toggleEmailMask() {
+        emailMasked = !emailMasked;
+        const maskBtn = document.getElementById('toggle-mask-btn');
+        const maskIcon = document.getElementById('mask-icon');
+        const maskStatus = document.getElementById('mask-status');
+        const emailElements = document.querySelectorAll('.subscriber-email');
+        
+        if (emailMasked) {
+            // Mask on
+            maskIcon.classList.remove('fa-eye');
+            maskIcon.classList.add('fa-eye-slash');
+            maskStatus.textContent = '{{ __("Mask On") }}';
+            emailElements.forEach(el => {
+                const originalEmail = el.getAttribute('data-email');
+                el.textContent = maskEmail(originalEmail);
+            });
+        } else {
+            // Mask off
+            maskIcon.classList.remove('fa-eye-slash');
+            maskIcon.classList.add('fa-eye');
+            maskStatus.textContent = '{{ __("Mask Off") }}';
+            emailElements.forEach(el => {
+                const originalEmail = el.getAttribute('data-email');
+                el.textContent = originalEmail;
+            });
+        }
+    }
+    
+    // Apply masking on page load (default: mask on)
+    document.addEventListener('DOMContentLoaded', function() {
+        if (emailMasked) {
+            const emailElements = document.querySelectorAll('.subscriber-email');
+            emailElements.forEach(el => {
+                const originalEmail = el.getAttribute('data-email');
+                el.textContent = maskEmail(originalEmail);
+            });
+        }
+    });
 
     function refreshTrackingData() {
         const btn = document.getElementById('refresh-tracking-btn');
