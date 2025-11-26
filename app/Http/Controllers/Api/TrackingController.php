@@ -42,19 +42,27 @@ class TrackingController extends Controller
      * 5 = landing_page_opened
      * 6 = thank_you_received
      * 7 = asset_downloaded
+     * 
+     * Supports suffixes like -001, -002, etc. which are automatically stripped.
+     * Example: "2-001" will be processed as task number 2.
      *
      * @param string $campaignHash Campaign ID (as hash)
      * @param string $subscriberHash Subscriber hash
-     * @param int $taskNumber Task number (1-7)
+     * @param string $taskNumber Task number (1-7), optionally with suffix like -001
      * @param Request $request
      * @return \Illuminate\Http\Response|JsonResponse
      */
-    public function trackSimple(string $campaignHash, string $subscriberHash, int $taskNumber, Request $request)
+    public function trackSimple(string $campaignHash, string $subscriberHash, string $taskNumber, Request $request)
     {
         // Handle CORS preflight requests
         if ($request->isMethod('OPTIONS')) {
             return $this->options();
         }
+
+        // Strip any suffix like -001, -002, etc. from task number
+        // Example: "2-001" becomes "2", "7-001" becomes "7"
+        $taskNumber = preg_replace('/-.*$/', '', $taskNumber);
+        $taskNumber = (int) $taskNumber;
 
         // Map task number to task type
         if (!isset(self::TASK_MAP[$taskNumber])) {
