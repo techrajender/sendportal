@@ -134,6 +134,10 @@ Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
         // Campaign recipients route
         Route::post('campaigns/{id}/recipients', [App\Http\Controllers\Campaigns\CampaignRecipientsController::class, 'getRecipients'])
             ->name('sendportal.campaigns.recipients.get');
+        
+        // Template clone route
+        Route::get('templates/{id}/clone', [App\Http\Controllers\Templates\ExtendedTemplatesController::class, 'clone'])
+            ->name('sendportal.templates.clone');
     }
 );
 

@@ -67,6 +67,9 @@ class AppServiceProvider extends ServiceProvider
             \Sendportal\Base\Http\Controllers\DashboardController::class,
             \App\Http\Controllers\ExtendedDashboardController::class
         );
+        
+        // Note: TemplatesController is not overridden as it may not exist in base package
+        // Clone functionality is added via a separate route
     }
 
     public function boot(): void
