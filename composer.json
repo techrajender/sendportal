@@ -10,8 +10,7 @@
         "laravel/horizon": "^5.24",
         "laravel/tinker": "^2.9",
         "livewire/livewire": "^3.4",
-        "laravel/ui": "^4.5",
-        "mettle/sendportal-core": "^3.0"
+        "laravel/ui": "^4.5"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
