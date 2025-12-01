@@ -40,6 +40,11 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Copy application files
 COPY . /var/www/html
 
+# Make scripts executable
+RUN if [ -d /var/www/html/scripts ]; then \
+        chmod +x /var/www/html/scripts/*.sh 2>/dev/null || true; \
+    fi
+
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
@@ -55,10 +60,10 @@ RUN touch /var/www/html/storage/app/health
 # Expose port 9000 for PHP-FPM
 EXPOSE 9000
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
+# Copy entrypoint script and make executable
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["php-fpm"]
 
