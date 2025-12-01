@@ -90,7 +90,7 @@ class Workspace extends BaseModel
     {
         return $this->belongsToMany(User::class, 'workspace_users')
             ->orderBy('name')
-            ->withPivot('role')
+            ->withPivot(['role', 'created_at', 'updated_at'])
             ->withTimestamps();
     }
 
