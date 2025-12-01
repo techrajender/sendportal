@@ -1,12 +1,18 @@
+# Nixpacks configuration for SendPortal
+# Note: This file is a fallback. The recommended approach is to use "Dockerfile" build pack in Coolify UI.
+
 [phases.setup]
 nixPkgs = ["php83", "php83Packages.composer"]
 
+# Explicitly set install commands to empty to prevent running docker-entrypoint.sh during build
 [phases.install]
 cmds = []
 
+# Build phase - run composer install
 [phases.build]
-cmds = []
+cmds = ["composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist"]
 
+# Start command
 [start]
 cmd = "php-fpm"
 
