@@ -40,10 +40,6 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Copy application files
 COPY . /var/www/html
 
-# Copy and make scripts executable
-COPY scripts/ /var/www/html/scripts/
-RUN chmod +x /var/www/html/scripts/*.sh
-
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
