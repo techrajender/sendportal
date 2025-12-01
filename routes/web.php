@@ -62,6 +62,8 @@ Route::namespace('Workspaces')
     ->group(
         static function (Router $workspacesRouter) {
             $workspacesRouter->get('/', 'WorkspaceUsersController@index')->name('index');
+            $workspacesRouter->put('{userId}', 'WorkspaceUsersController@update')->name('update');
+            $workspacesRouter->post('{userId}/reset-password', 'WorkspaceUsersController@resetPassword')->name('reset-password');
             $workspacesRouter->delete('{userId}', 'WorkspaceUsersController@destroy')->name('destroy');
 
             // Invitations.
@@ -108,7 +110,42 @@ Route::namespace('Workspaces')->middleware(
 Route::middleware(['auth', 'verified', RequireWorkspace::class])->group(
     static function () {
         Sendportal::webRoutes();
+        
+        // Campaign tracking route
+        Route::get('campaigns/{id}/report/tracking', [App\Http\Controllers\Campaigns\CampaignTrackingController::class, 'index'])
+            ->name('sendportal.campaigns.reports.tracking');
+        
+        // Campaign tracking export route
+        Route::get('campaigns/{id}/report/tracking/export', [App\Http\Controllers\Campaigns\CampaignTrackingController::class, 'export'])
+            ->name('sendportal.campaigns.reports.tracking.export');
+        
+        // Campaign exclusions routes
+        Route::post('campaigns/{id}/exclusions', [App\Http\Controllers\Campaigns\CampaignExclusionController::class, 'store'])
+            ->name('sendportal.campaigns.exclusions.store');
+        Route::delete('campaigns/{id}/exclusions', [App\Http\Controllers\Campaigns\CampaignExclusionController::class, 'destroy'])
+            ->name('sendportal.campaigns.exclusions.destroy');
+        
+        // Campaign status update route
+        Route::put('campaigns/{id}/status', [App\Http\Controllers\Campaigns\CampaignStatusController::class, 'update'])
+            ->name('sendportal.campaigns.status.update');
+        
+        // Campaign reprocess route for stuck campaigns
+        Route::post('campaigns/{id}/reprocess', [App\Http\Controllers\Campaigns\CampaignStatusController::class, 'reprocess'])
+            ->name('sendportal.campaigns.reprocess');
+        
+        // Campaign recipients route
+        Route::post('campaigns/{id}/recipients', [App\Http\Controllers\Campaigns\CampaignRecipientsController::class, 'getRecipients'])
+            ->name('sendportal.campaigns.recipients.get');
+        
+        // Template clone route
+        Route::get('templates/{id}/clone', [App\Http\Controllers\Templates\ExtendedTemplatesController::class, 'clone'])
+            ->name('sendportal.templates.clone');
     }
 );
 
 Sendportal::publicWebRoutes();
+
+// Public font proxy route (no auth required) - allows unisonwavepromote.com to load fonts
+Route::match(['GET', 'OPTIONS'], 'fonts/proxy', [App\Http\Controllers\FontProxyController::class, 'proxy'])
+    ->name('fonts.proxy.public');
+Route::options('fonts/proxy', [App\Http\Controllers\FontProxyController::class, 'options']);

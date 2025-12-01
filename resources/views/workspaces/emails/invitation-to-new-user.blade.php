@@ -6,7 +6,7 @@
 </p>
 
 <p>
-    <a href="{{ url('register?invitation='.$invitation->token) }}">{{ url('register?invitation='.$invitation->token) }}</a>
+    <a href="{{ config('app.url') }}/register?invitation={{ $invitation->token }}">{{ config('app.url') }}/register?invitation={{ $invitation->token }}</a>
 </p>
 
 <p>{{__('See you soon!')}}</p>

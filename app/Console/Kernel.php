@@ -23,7 +23,14 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // Check for stuck campaigns every 5 minutes and auto-fix them
+        $schedule->command('campaigns:check-stuck --fix')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(10) // Allow 10 minutes max execution time, release lock after 10 min
+            ->appendOutputTo(storage_path('logs/stuck-campaigns-check.log'))
+            ->onFailure(function () {
+                \Illuminate\Support\Facades\Log::error('CheckStuckCampaigns scheduled task failed');
+            });
     }
 
     /**
